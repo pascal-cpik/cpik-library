@@ -10,7 +10,7 @@ SHELL := /bin/bash
 PROC = 18f4520
 
 FILES := sim 
-LOCALSLBS = memcpymove.slb strcmp.slb bsort.slb csort.slb
+LOCALSLBS = memcpymove.slb strcmp.slb bsort.slb csort.slb 
 
 LIBS = $(LOCALSLBS:%=lib/%)
 

@@ -28,7 +28,7 @@
 ;   VERSION 0.1
 ;
 ;   HISTORY
-;   - Created 26-02-2014 by P. Niklaus
+;   - Created 26-02-2015 by P. Niklaus
 ;
 ;   CONTENTS
 ;
@@ -134,8 +134,7 @@ C18_bsort_innerloop
         movf    PLUSW0,W,0        ; size        
 
         ; --- check comparison result
-        negf    R0,0
-        bz      C18_bsort_dont_swap
+        comf    R0,F,0
         bn      C18_bsort_dont_swap
                 
         ; --- swap data
