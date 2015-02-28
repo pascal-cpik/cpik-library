@@ -1,0 +1,343 @@
+;   Copyright (C) 2015, Pascal Niklaus pascal@niklaus.org
+;
+;   This file is part of the CPIK library
+;   ----------------------------------------------------------------------- 
+;   This library is free software; you can redistribute it and/or modify it
+;   under the terms of the GNU General Public License as published by the
+;   Free Software Foundation; either version 2.1, or (at your option) any
+;   later version.
+ 
+;   This library is distributed in the hope that it will be useful,
+;   but WITHOUT ANY WARRANTY; without even the implied warranty of
+;   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;   GNU General Public License for more details.
+ 
+;   You should have received a copy of the GNU General Public License 
+;   along with this library; see the file COPYING. If not, write to the
+;   Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
+;   MA 02110-1301, USA.
+ 
+;   As a special exception, if you link this library with other files,
+;   some of which are compiled with CPIK, to produce an executable,
+;   this library does not by itself cause the resulting executable to
+;   be covered by the GNU General Public License. This exception does
+;   not however invalidate any other reasons why the executable file
+;   might be covered by the GNU General Public License.
+
+
+;   VERSION 0.1
+;
+;   HISTORY
+;   - Created 24-02-2014 by P. Niklaus
+;
+;   CONTENTS
+;
+;   C18_strlen
+;   C18_strcpy
+;   C18_strcat
+;   C18_strcmp
+;   C18_strncmp
+;   C18_strcasecmp
+;   C18_strncasecmp
+;
+;   ----------------------------------------------------------------------- 
+
+
+
+
+
+; strlen
+; size_t strlen(char *s);
+; 24 bytes
+;<+C18_strlen>
+C18_strlen
+        movlw   -1             ; copy s to FSR1
+        movff   PLUSW0,FSR1L     
+        movff   INDF0,FSR1H         
+        movwf   R0,0           ; take advantage that w=0xff
+        movwf   R0+1,0        
+C18_strlen_loop
+        infsnz  R0,F,0
+        incf    R0+1,F,0
+        movf    POSTINC1,W,0
+        bnz     C18_strlen_loop                  
+        return  0
+;<->
+
+
+
+
+; copy string
+;
+; returns pointer to destination
+;
+; char *strcpy(char *dest, char *src)
+; 34 bytes
+;<+C18_strcpy>
+C18_strcpy
+        movlw   -3             ; copy src to FSR1
+        movff   PLUSW0,FSR1L
+        movlw   -2
+        movff   PLUSW0,FSR1H
+
+        movlw   -1             ; copy dest to FSR2 and R
+        movf    PLUSW0,W,0
+        movwf   FSR2L,0     
+        movwf   R0,0
+        movf    INDF0,W,0
+        movwf   FSR2H,0
+        movwf   R0+1,0
+C18_strcpy_entry_from_strcat
+C18_strcpy_loop
+        movf    POSTINC1,W,0
+        movwf   POSTINC2,0        
+        bnz     C18_strcpy_loop
+        return  0        
+;<->
+
+
+
+; apped string
+;
+; returns pointer to destination
+;
+; char *strcat(char *dest, char *src)
+; 34 bytes
+;<+C18_strcat>
+C18_strcat
+        movlw   -3             ; copy src to FSR1
+        movff   PLUSW0,FSR1L
+        movlw   -2
+        movff   PLUSW0,FSR1H
+
+        movlw   -1             ; copy dest to FSR2 and R
+        movf    PLUSW0,W,0
+        movwf   FSR2L,0
+        movwf   R0,0
+        movf    INDF0,W,0
+        movwf   FSR2H,0         
+        movwf   R0+1,0
+                
+C18_strcat_loop
+        movf    POSTINC2,W,0        
+        bnz     C18_strcat_loop
+        movf    POSTDEC2,W,0
+        bra     C18_strcpy_entry_from_strcat
+;<?C18_strcpy>        
+;<->
+
+
+
+
+; compare two strings
+;
+; returns -1,0,1 if s1<s2, s1=s2, s1>s2
+; note that comparisons are unsigned (matters for chars >0x7f) 
+; although char is signed. This is compatible with the GNU libc's
+; behaviour
+;
+; char *strcmp(char *s1, char *s2)
+; 46 bytes
+;<+C18_strcmp>
+C18_strcmp
+        clrf    R0,0
+        movlw   -3               ; copy src to FSR1
+        movff   PLUSW0,FSR1L
+        movlw   -2
+        movff   PLUSW0,FSR1H
+
+        movlw   -1               ; copy dest to FSR2         
+        movff   PLUSW0,FSR2L     
+        movff   INDF0,FSR2H         
+                   
+C18_strcmp_loop
+        movf    POSTINC1,W,0
+        subwf   POSTINC2,W,0
+        bnc     C18_strcmp_smaller
+        bz      C18_strcmp_checkend
+C18_strcmp_larger   
+        incf    R0,F,0
+        return  0
+C18_strcmp_smaller
+        decf    R0,F,0
+        return  0
+C18_strcmp_checkend
+        movf    INDF1,W,0
+        bnz     C18_strcmp_loop
+        return  0        
+;<->
+
+
+
+
+; compare at most n characters of two strings
+; see strcmp for more details
+;
+; char *strncmp(char *s1, char *s2, size_t n)
+; 70 bytes
+;<+C18_strncmp>
+C18_strncmp
+        clrf    R0,0
+        movlw   -5                ; R1 is n
+        movff   PLUSW0,R1
+        movlw   -4
+        movff   PLUSW0,R1+1        
+        comf    R1,F,0
+        comf    R1+1,F,0
+                
+        movlw   -3               ; copy src to FSR1
+        movff   PLUSW0,FSR1L
+        movlw   -2
+        movff   PLUSW0,FSR1H
+
+        movlw   -1               ; copy dest to FSR2 
+        movff   PLUSW0,FSR2L     
+        movff   INDF0,FSR2H         
+                   
+C18_strncmp_loop
+        incf    R1,F,0
+        bnz     C18_strncmp_cont
+        incf    R1+1,F,0
+        bz      C18_strncmp_end
+C18_strncmp_cont        
+        movf    POSTINC1,W,0
+        subwf   POSTINC2,W,0
+        bnc     C18_strncmp_smaller
+        bz      C18_strncmp_checkend
+C18_strncmp_larger   
+        incf    R0,F,0
+        return  0
+C18_strncmp_smaller
+        decf    R0,F,0
+        return  0
+C18_strncmp_checkend
+        movf    INDF1,W,0
+        bnz     C18_strncmp_loop
+C18_strncmp_end        
+        return  0        
+;<->
+
+
+; compare two strings, ignoring the case of the 
+; letters A-Z
+;
+; char *strcasecmp(char *s1, char *s2)
+; 54 bytes (+10 bytes for shared strlib_toupper)
+;<+C18_strcasecmp>
+C18_strcasecmp
+        clrf    R0,0
+        movlw   -3               ; copy src to FSR1
+        movff   PLUSW0,FSR1L
+        movlw   -2
+        movff   PLUSW0,FSR1H
+
+        movlw   -1               ; copy dest to FSR2 
+        movff   PLUSW0,FSR2L     
+        movff   INDF0,FSR2H         
+                   
+C18_strcasecmp_loop
+        movf    POSTINC2,W,0
+        call    C18_strlib_toupper
+        movwf   R0+1,0
+        movf    POSTINC1,W,0
+        call    C18_strlib_toupper        
+        subwf   R0+1,W,0
+        bnc     C18_strcasecmp_smaller
+        bz      C18_strcasecmp_checkend
+C18_strcasecmp_larger   
+        incf    R0,F,0
+        return  0
+C18_strcasecmp_smaller
+        decf    R0,F,0
+        return  0
+C18_strcasecmp_checkend
+        movf    INDF1,W,0
+        bnz     C18_strcasecmp_loop
+        return  0        
+;<?strlib_toupper>
+;<->
+
+
+
+
+; convert ASCII code in W to upper case
+; 10 bytes
+;<+strlib_toupper>
+C18_strlib_toupper
+        addlw   255 - 'z'
+        addlw   ('z'-'a')+1
+        bnc     C18_strlib_toupper_end
+        addlw   'A'-'a'
+C18_strlib_toupper_end
+        return  0
+;<->
+
+
+
+
+; convert ASCII code in W to lower case
+; 10 bytes
+;<+strlib_tolower>
+C18_strlib_tolower
+        addlw   255 - 'Z'
+        addlw   ('Z'-'A')+1
+        bnc     C18_strlib_tolower_end
+        addlw   'a'-'A'
+C18_strlib_tolower_end
+        return  0
+;<->
+
+
+
+
+; compare two strings, ignoring the case of A-Z, and
+; comparing at most n characters
+;
+; char *strncasecmp(char *s1, char *s2, size_t n)
+; 78 bytes (+10 bytes for shared strlib_toupper)
+;<+C18_strncasecmp>
+C18_strncasecmp
+        clrf    R0,0
+        movlw   -5                ; R1 is n
+        movff   PLUSW0,R1
+        movlw   -4
+        movff   PLUSW0,R1+1        
+        comf    R1,F,0
+        comf    R1+1,F,0
+                
+        movlw   -3               ; copy src to FSR1
+        movff   PLUSW0,FSR1L
+        movlw   -2
+        movff   PLUSW0,FSR1H
+
+        movlw   -1               ; copy dest to FSR2 
+        movff   PLUSW0,FSR2L     
+        movff   INDF0,FSR2H         
+                   
+C18_strncasecmp_loop
+        incf    R1,F,0
+        bnz     C18_strncasecmp_cont
+        incf    R1+1,F,0
+        bz      C18_strncasecmp_end
+C18_strncasecmp_cont        
+        movf    POSTINC2,W,0
+        rcall   C18_strlib_toupper
+        movwf   R0+1,0
+        movf    POSTINC1,W,0
+        rcall   C18_strlib_toupper        
+        subwf   R0+1,W,0
+        bnc     C18_strncasecmp_smaller
+        bz      C18_strncasecmp_checkend
+C18_strncasecmp_larger   
+        incf    R0,F,0
+        return  0
+C18_strncasecmp_smaller
+        decf    R0,F,0
+        return  0
+C18_strncasecmp_checkend
+        movf    INDF1,W,0
+        bnz     C18_strncasecmp_loop
+C18_strncasecmp_end        
+        return  0        
+;<?strlib_toupper>
+;<->

@@ -1,0 +1,279 @@
+;   Copyright (C) 2015, Pascal Niklaus pascal@niklaus.org
+;
+;   This file is part of the CPIK library
+;   -----------------------------------------------------------------------
+;   This library is free software; you can redistribute it and/or modify it
+;   under the terms of the GNU General Public License as published by the
+;   Free Software Foundation; either version 2.1, or (at your option) any
+;   later version.
+
+;   This library is distributed in the hope that it will be useful,
+;   but WITHOUT ANY WARRANTY; without even the implied warranty of
+;   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;   GNU General Public License for more details.
+
+;   You should have received a copy of the GNU General Public License
+;   along with this library; see the file COPYING. If not, write to the
+;   Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
+;   MA 02110-1301, USA.
+
+;   As a special exception, if you link this library with other files,
+;   some of which are compiled with CPIK, to produce an executable,
+;   this library does not by itself cause the resulting executable to
+;   be covered by the GNU General Public License. This exception does
+;   not however invalidate any other reasons why the executable file
+;   might be covered by the GNU General Public License.
+
+
+;   VERSION 0.1
+;
+;   HISTORY
+;   - Created 26-02-2014 by P. Niklaus
+;
+;   CONTENTS
+;
+;   C18_csort
+;
+;   -----------------------------------------------------------------------
+
+; Comb sort
+;
+; Implementation of the comb sort algorithm for arbitrary structures with
+; up to 127 bytes in element size.
+; This algorithm is a more performant implementation basic and has a very small memory footprint.
+; However, it scales poorly with array size and therefore should only be used
+; for small arrays or when execution time is not critical.
+;
+; void csort(void *data, size_t length, unsigned char size, char *(cmpfun)(void *e1, *e2), )
+;
+; data:   address of first array element
+; length: number of elements in array
+; size:   size of a single element (1..127 bytes)
+; cmpfun: function returning a value>0 if e1>e2
+;
+; 354 bytes
+:
+; register use:
+;
+; Stack during execution:
+;
+; -------------------- arguments when called
+; -6  cmpfuncL
+; -5  cmdfuncH
+; -4  size
+; -3  lengthL
+; -2  lengthH
+; -1  dataL
+;  0  dataH
+; -------------------- inner loop vars
+;  1  stop value for e2L
+;  2  stop value for e2H
+;  3  swap flag
+;  4  gapL
+;  5  gapH
+; -------------------- arguments for cmpfun call
+;  6  e1L
+;  7  e1H
+;  8  e2L         
+;  9  e2H           <- FSR0 during loop execution
+; 10  cmdfuncL
+; 11  cmdfuncH     
+; --------- arguments/results of mul16 / add16
+; 12  resultL/argL
+; 13  resultH/argH <- FSR0 during ptr calculations
+
+;<+C18_csort>
+C18_csort
+        movlw   -4
+        movff   PLUSW0,PREINC0
+        clrf    PREINC0,0
+        movlw   -3-2
+        movff   PLUSW0,R0
+        movlw   -2-2
+        movff   PLUSW0,R0+1
+        call    mul16
+        movlw   -1-2
+        movff   PLUSW0,R0
+        movlw   0-2
+        movff   PLUSW0,R0+1
+        call    add16           ; by now the end pointer is on the stack (2 bytes)
+
+        movf    PREINC0,F,0     ; space for swap flag
+
+        movlw   -3-3            ; copy length, will become gap variable
+        movff   PLUSW0,PREINC0
+        movff   PLUSW0,PREINC0
+
+        movf    PREINC0,F,0     ; reserve space for e1
+        movf    PREINC0,F,0
+        movf    PREINC0,F,0     ; reserve space for e2
+        movf    PREINC0,F,0
+
+C18_csort_outerloop
+        movlw   -9+3           ; clear swap flag
+        clrf    PLUSW0,0
+
+        movlw   -9+5           ; R0=R1=gapL:gapH
+        movf    PLUSW0,W,0
+        movwf   R0+1,0
+        movwf   R1+1,0
+        movlw   -9+4
+        movf    PLUSW0,W,0
+        movwf   R0,0
+        movwf   R1,0
+
+        addlw   -1              ; if gap==1 --> keep gap
+        bnz     C18_csort_gap_unequal_one
+        movf    R0+1,W,0
+        bz      C18_csort_gap_ok
+
+C18_csort_gap_unequal_one       ; if gap>1 --> gap *= 0.75
+        bcf     STATUS,C,0      ; R1 = R1 / 4
+        rrcf    R1+1,F,0
+        rrcf    R1,F,0
+        bcf     STATUS,C,0
+        rrcf    R1+1,F,0
+        rrcf    R1,F,0
+        bnz     C18_csort_gapR1ok ; make sure R1 is > 0
+        movf    R1+1,W,0
+        bnz     C18_csort_gapR1ok
+        incf    R1,F,0
+C18_csort_gapR1ok
+        movf    R1,W            ; R0 -= R1
+        subwf   R0,F,0
+        movf    R1+1,W
+        btfss   STATUS,C
+        incfsz  R1+1,W
+        subwf   R0+1,F,0
+
+        movf    R0,W,0          ; R0 = max(1,R0)
+        iorwf   R0+1,W,0
+        bnz     C18_csort_gap_ok
+        incf    R0,0
+C18_csort_gap_ok
+        movlw   -9+4
+        movff   R0,PLUSW0
+        movlw   -9+5
+        movf    R0+1,PLUSW0     ; copy gap back in place
+
+        movlw   -9-4           ; push sizeL onto stack
+        movff   PLUSW0,PREINC0  
+        clrf    PREINC0,0       ; push sizeH = 0
+        call    mul16           ; multiply with R0 (gap size)
+        
+        movlw   -11-1           ; add data
+        movff   PLUSW0,R0
+        movlw   -11+6
+        movff   R0,PLUSW0       ; copy data ptrL to e1L
+        movlw   -11-0
+        movff   PLUSW0,R0+1
+        movlw   -11+7
+        movff   R0+1,PLUSW0     ; copy data ptrH to e1H
+        call    add16           ; by now ptr to e2 is on stack
+        movlw   -11+9+1
+        movff   POSTDEC0,PLUSW0 ; copy e2 to proper place
+        movlw   -10+8+1
+        movff   POSTDEC0,PLUSW0
+
+C18_csort_innerloop
+        movlw   -9-6
+        movff   PLUSW0,PREINC0   ; copy cmpfun pointer
+        movff   PLUSW0,PREINC0
+        
+        ; --- indirect call
+        ICALL   indirect_call   ; e1,e2,cmpfun already set
+
+        movlw   -9-4           ; R1 = size (use in loop and for increment)
+        movff   PLUSW0,R1
+
+        ; --- check comparison result
+        negf    R0,0
+        bz      C18_csort_dont_swap
+        bn      C18_csort_dont_swap
+
+        ; --- swap data
+C18_csort_swap
+        movlw   -9+3            ; set swap flag
+        bsf     PLUSW0,1,0        
+
+        rcall   C18_csort_e1e2toFSR12
+
+C18_csort_swap_loop               ; swap *FSR1 and *FSR1, len = size (in R0), R0+1 = temporary
+        movff   INDF1,R0+1
+        movff   INDF2,POSTINC1
+        movff   R0+1,POSTINC2
+
+        decf    R1,F,0
+        bnz     C18_csort_swap_loop
+        bra     C18_csort_innerloop_checkend
+
+C18_csort_dont_swap               ; FSR1 += size, FSR2 += size
+        rcall   C18_csort_e1e2toFSR12
+        
+        movf    R1,W,0
+        
+        addwf   FSR1L,F,0
+        btfsc   STATUS,C
+        incf    FSR1H,F,0
+        
+        addwf   FSR2L,F,0
+        btfsc   STATUS,C
+        incf    FSR2H,F,0
+        
+C18_csort_innerloop_checkend
+        movlw   -9+1
+        movf    PLUSW0,W,0
+        subwf   FSR2L,0
+        bnz     C18_csort_innerloop_not_done
+        
+        movlw   -9+2
+        movf    PLUSW0,W,0
+        subwf   FSR2H,0
+        bz      C18_csort_innerloop_end
+        
+C18_csort_innerloop_not_done
+        rcall   C18_csort_FSR12toe1e2
+        bra     C18_csort_innerloop
+
+C18_csort_goto_outerloop
+        goto    C18_csort_outerloop
+        
+C18_csort_innerloop_end
+        movlw   -9+5
+        movf    PLUSW0,W,0
+        bnz     C18_csort_goto_outerloop
+        movlw   -9+4
+        movf    PLUSW0,W,0
+        addlw   -1
+        bnz     C18_csort_goto_outerloop
+        movlw   -9+3
+        movf    PLUSW0,W,0          ; swap flag set?
+        bnz     C18_csort_outerloop ;yes, repeat
+        return  0
+
+C18_csort_e1e2toFSR12
+        movlw   -9+6
+        movff   PLUSW0,FSR1L
+        movlw   -9+7
+        movff   PLUSW0,FSR1H
+        movlw   -9+8
+        movff   PLUSW0,FSR2L
+        movlw   -9+9
+        movff   PLUSW0,FSR2H
+        return  0
+
+C18_csort_FSR12toe1e2
+        movlw   -9+6
+        movff   FSR1L,PLUSW0
+        movlw   -9+7
+        movff   FSR1H,PLUSW0
+        movlw   -9+8
+        movff   FSR2L,PLUSW0
+        movlw   -9+9
+        movff   FSR2H,PLUSW0
+        return  0
+
+;<?mul16>
+;<?add16>
+;<?indirect_call>
+;<->
