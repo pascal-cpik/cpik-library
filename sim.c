@@ -27,6 +27,7 @@
 uint8_t error=0;
 
 char result[] = "----- RUNNING -----";
+char s1[50];
 
 typedef char (*bsort_cmp)(void *e1, void *e2);
 
@@ -87,12 +88,8 @@ uint8_t n=200;
 
 int8_t main()
 {
-//   uint8_t u8;
-//   uint16_t u16,r,offset;  
-//   r=u8*u16+offset;
-
-
   bsort(x,n,2,(bsort_cmp)cmpu16);
+  csort(x,n,2,(bsort_cmp)cmpu16);
   for(i=0; i<n-2; i++) {
     if(x[i]>x[i+1]) {
       error=1; 
@@ -104,7 +101,7 @@ int8_t main()
   else
     strcpy(result,(char*)"***** OK ****");
 //   csort(xs,8,sizeof(struct str),(bsort_cmp)cmpstr); 
-#if 0  
+#if 1  
   
   strcpy(s1,(char*)"0123456789");
   memmove(s1,s1+1,4);

@@ -97,24 +97,25 @@ C18_csort
         movff   PLUSW0,R0
         movlw   0-2
         movff   PLUSW0,R0+1
-        call    add16           ; by now the end pointer is on the stack (2 bytes)
+        call    add16           ; by now the end pointer (stop value) is on the stack 
 
-        movf    PREINC0,F,0     ; space for swap flag
+        movf    PREINC0,F,0     ; allocate space for swap flag
 
-        movlw   -3-3            ; copy length, will become gap variable
+        movlw   -3-3            ; copy vector length, will become gap variable
         movff   PLUSW0,PREINC0
         movff   PLUSW0,PREINC0
 
-        movf    PREINC0,F,0     ; reserve space for e1
+        movf    PREINC0,F,0     ; allocate space for e1
         movf    PREINC0,F,0
-        movf    PREINC0,F,0     ; reserve space for e2
+        movf    PREINC0,F,0     ; allocate space for e2
         movf    PREINC0,F,0
 
-C18_csort_outerloop
+L18_csort_outerloop
         movlw   -9+3           ; clear swap flag
         clrf    PLUSW0,0
 
-        movlw   -9+5           ; R0=R1=gapL:gapH
+        ; --- calculate gap = min(1,gap - min(1,gap * 0.25))
+        movlw   -9+5           ; R0 = R1 = gapL:gapH
         movf    PLUSW0,W,0
         movwf   R0+1,0
         movwf   R1+1,0
@@ -124,22 +125,22 @@ C18_csort_outerloop
         movwf   R1,0
 
         addlw   -1              ; if gap==1 --> keep gap
-        bnz     C18_csort_gap_unequal_one
+        bnz     L18_csort_gap_unequal_one
         movf    R0+1,W,0
-        bz      C18_csort_gap_ok
+        bz      L18_csort_gap_ok
 
-C18_csort_gap_unequal_one       ; if gap>1 --> gap *= 0.75
+L18_csort_gap_unequal_one       ; if gap>1 --> gap *= 0.75
         bcf     STATUS,C,0      ; R1 = R1 / 4
         rrcf    R1+1,F,0
         rrcf    R1,F,0
         bcf     STATUS,C,0
         rrcf    R1+1,F,0
         rrcf    R1,F,0
-        bnz     C18_csort_gapR1ok ; make sure R1 is > 0
+        bnz     L18_csort_gapR1ok ; make sure R1 is > 0
         movf    R1+1,W,0
-        bnz     C18_csort_gapR1ok
+        bnz     L18_csort_gapR1ok
         incf    R1,F,0
-C18_csort_gapR1ok
+L18_csort_gapR1ok
         movf    R1,W,0          ; R0 -= R1
         subwf   R0,F,0
         movf    R1+1,W,0
@@ -149,19 +150,21 @@ C18_csort_gapR1ok
 
         movf    R0,W,0          ; R0 = max(1,R0)
         iorwf   R0+1,W,0
-        bnz     C18_csort_gap_ok
+        bnz     L18_csort_gap_ok
         incf    R0,0
-C18_csort_gap_ok
+L18_csort_gap_ok
         movlw   -9+4
         movff   R0,PLUSW0
         movlw   -9+5
-        movf    R0+1,PLUSW0,0   ; copy gap back in place
-
+        movff   R0+1,PLUSW0     ; copy gap back in place
+        
+        ; --- calculate difference e2-e1 = gap * size
         movlw   -9-5            
         movff   PLUSW0,PREINC0  ; push sizeL onto stack
         movff   PLUSW0,PREINC0  ; push sizeH onto stack        
         call    mul16           ; multiply with R0 (gap size)
         
+        ; --- e1 = data, e2 = e1 + gap * size
         movlw   -11-1           ; add data
         movff   PLUSW0,R0
         movlw   -11+6
@@ -176,16 +179,16 @@ C18_csort_gap_ok
         movlw   -10+8+1
         movff   POSTDEC0,PLUSW0
 
-C18_csort_innerloop
+        ; --- sweep over datav vector, comparing *e1 and *e2
+L18_csort_innerloop             
         movlw   -9-7
         movff   PLUSW0,PREINC0  ; copy cmpfun pointer
         movff   PLUSW0,PREINC0
-        
-        ; --- indirect call
+                
         call    indirect_call   ; e1,e2,cmpfun already set
 
-        movlw   -9-5            ; R1/R1+1 = size (use in loop and for increment)
-        movff   PLUSW0,R1
+        movlw   -9-5            ; R1:R1+1 = size (used later)
+        movff   PLUSW0,R1       
         movlw   -9-4           
         movff   PLUSW0,R1+1
 
@@ -199,31 +202,31 @@ C18_csort_innerloop
         movff   PLUSW0,FSR2H
         
         ; --- check comparison result
-
         comf    R0,W,0
-        bn      C18_csort_dont_swap
+        bn      L18_csort_dont_swap
         
+L18_csort_swap
         ; --- swap data
-C18_csort_swap
         movlw   -9+3            ; set swap flag
         bsf     PLUSW0,1,0        
                 
         comf    R1,F,0
         comf    R1+1,F,0
-        bra     C18_csort_swap_loop_start
+        bra     L18_csort_swap_loop_start
         
-C18_csort_swap_loop             ; swap *FSR1 and *FSR1, len = size (in R0), R0+1 = temporary
+L18_csort_swap_loop             ; swap *FSR1 and *FSR1, len = size (in R0), R0+1 = temporary
         movff   INDF1,R0+1
         movff   INDF2,POSTINC1
         movff   R0+1,POSTINC2
-C18_csort_swap_loop_start
+L18_csort_swap_loop_start
         incf    R1,F,0
-        bnz     C18_csort_swap_loop
+        bnz     L18_csort_swap_loop
         incf    R1+1,F,0
-        bnz     C18_csort_swap_loop
-        bra     C18_csort_innerloop_checkend
+        bnz     L18_csort_swap_loop
+        bra     L18_csort_innerloop_checkend
         
-C18_csort_dont_swap               ; FSR1 += size, FSR2 += size
+L18_csort_dont_swap               
+        ; --- increment e1, e2 by size
         movf    R1,W,0         
         addwf   FSR1L,F,0         
         movf    R1+1,W,0 
@@ -238,19 +241,21 @@ C18_csort_dont_swap               ; FSR1 += size, FSR2 += size
         incf    R1+1,W,0       
         addwf   FSR2H,F,0       
         
-C18_csort_innerloop_checkend
+L18_csort_innerloop_checkend
+        ; --- check whether e2 reached "stop" value
         movlw   -9+1
         movf    PLUSW0,W,0
         subwf   FSR2L,0
-        bnz     C18_csort_innerloop_not_done
+        bnz     L18_csort_innerloop_not_done
         
         movlw   -9+2
         movf    PLUSW0,W,0
         subwf   FSR2H,0
-        bz      C18_csort_innerloop_end
+        bz      L18_csort_innerloop_end
         
-C18_csort_innerloop_not_done
-        movlw   -9+6                  ; copy FSR1/2 to e1/e2
+L18_csort_innerloop_not_done
+        ; --- copy FSR1/FSR2 back to e1,e2
+        movlw   -9+6                  
         movff   FSR1L,PLUSW0
         movlw   -9+7
         movff   FSR1H,PLUSW0
@@ -258,23 +263,23 @@ C18_csort_innerloop_not_done
         movff   FSR2L,PLUSW0
         movlw   -9+9
         movff   FSR2H,PLUSW0
-        bra     C18_csort_innerloop
-
-C18_csort_goto_outerloop
-        goto    C18_csort_outerloop
+        bra     L18_csort_innerloop
         
-C18_csort_innerloop_end
+L18_csort_innerloop_end
         movlw   -9+5
         movf    PLUSW0,W,0
-        bnz     C18_csort_goto_outerloop
+        bnz     L18_csort_goto_outerloop
         movlw   -9+4
         movf    PLUSW0,W,0
         addlw   -1
-        bnz     C18_csort_goto_outerloop
+        bnz     L18_csort_goto_outerloop
         movlw   -9+3
         movf    PLUSW0,W,0               ; swap flag set?
-        bnz     C18_csort_goto_outerloop ; yes, repeat
+        bnz     L18_csort_goto_outerloop ; yes, repeat
         return  0
+
+L18_csort_goto_outerloop
+        goto    L18_csort_outerloop     ; "long" jump
         
 ;<?mul16>
 ;<?add16>
