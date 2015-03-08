@@ -56,12 +56,13 @@ C18_strlen
         movff   INDF0,FSR1H         
         movwf   R0,0           ; take advantage that w=0xff
         movwf   R0+1,0        
-C18_strlen_loop
+L18_strlen_loop
         infsnz  R0,F,0
         incf    R0+1,F,0
         movf    POSTINC1,W,0
-        bnz     C18_strlen_loop                  
+        bnz     L18_strlen_loop                  
         return  0
+X18_strlen        
 ;<->
 
 
@@ -87,12 +88,13 @@ C18_strcpy
         movf    INDF0,W,0
         movwf   FSR2H,0
         movwf   R0+1,0
-C18_strcpy_entry_from_strcat
-C18_strcpy_loop
+L18_strcpy_entry_from_strcat
+L18_strcpy_loop
         movf    POSTINC1,W,0
         movwf   POSTINC2,0        
-        bnz     C18_strcpy_loop
-        return  0        
+        bnz     L18_strcpy_loop
+        return  0 
+X18_strcpy        
 ;<->
 
 
@@ -118,11 +120,12 @@ C18_strcat
         movwf   FSR2H,0         
         movwf   R0+1,0
                 
-C18_strcat_loop
+L18_strcat_loop
         movf    POSTINC2,W,0        
-        bnz     C18_strcat_loop
+        bnz     L18_strcat_loop
         movf    POSTDEC2,W,0
-        bra     C18_strcpy_entry_from_strcat
+        IBRA    L18_strcpy_entry_from_strcat
+X18_strcat
 ;<?C18_strcpy>        
 ;<->
 
@@ -150,21 +153,22 @@ C18_strcmp
         movff   PLUSW0,FSR2L     
         movff   INDF0,FSR2H         
                    
-C18_strcmp_loop
+L18_strcmp_loop
         movf    POSTINC1,W,0
         subwf   POSTINC2,W,0
-        bnc     C18_strcmp_smaller
-        bz      C18_strcmp_checkend
-C18_strcmp_larger   
+        bnc     L18_strcmp_smaller
+        bz      L18_strcmp_checkend
+L18_strcmp_larger   
         incf    R0,F,0
         return  0
-C18_strcmp_smaller
+L18_strcmp_smaller
         decf    R0,F,0
         return  0
-C18_strcmp_checkend
+L18_strcmp_checkend
         movf    INDF1,W,0
-        bnz     C18_strcmp_loop
-        return  0        
+        bnz     L18_strcmp_loop
+        return  0
+X18_strcmp        
 ;<->
 
 
@@ -194,27 +198,28 @@ C18_strncmp
         movff   PLUSW0,FSR2L     
         movff   INDF0,FSR2H         
                    
-C18_strncmp_loop
+L18_strncmp_loop
         incf    R1,F,0
-        bnz     C18_strncmp_cont
+        bnz     L18_strncmp_cont
         incf    R1+1,F,0
-        bz      C18_strncmp_end
-C18_strncmp_cont        
+        bz      L18_strncmp_end
+L18_strncmp_cont        
         movf    POSTINC1,W,0
         subwf   POSTINC2,W,0
-        bnc     C18_strncmp_smaller
-        bz      C18_strncmp_checkend
-C18_strncmp_larger   
+        bnc     L18_strncmp_smaller
+        bz      L18_strncmp_checkend
+L18_strncmp_larger   
         incf    R0,F,0
         return  0
-C18_strncmp_smaller
+L18_strncmp_smaller
         decf    R0,F,0
         return  0
-C18_strncmp_checkend
+L18_strncmp_checkend
         movf    INDF1,W,0
-        bnz     C18_strncmp_loop
-C18_strncmp_end        
-        return  0        
+        bnz     L18_strncmp_loop
+L18_strncmp_end        
+        return  0
+X18_strncmp        
 ;<->
 
 
@@ -222,7 +227,7 @@ C18_strncmp_end
 ; letters A-Z
 ;
 ; char *strcasecmp(char *s1, char *s2)
-; 54 bytes (+10 bytes for shared strlib_toupper)
+; 54 bytes (+10 bytes for shared L18_strlib_toupper)
 ;<+C18_strcasecmp>
 C18_strcasecmp
         clrf    R0,0
@@ -235,26 +240,27 @@ C18_strcasecmp
         movff   PLUSW0,FSR2L     
         movff   INDF0,FSR2H         
                    
-C18_strcasecmp_loop
+L18_strcasecmp_loop
         movf    POSTINC2,W,0
-        call    C18_strlib_toupper
+        ICALL   L18_strlib_toupper
         movwf   R0+1,0
         movf    POSTINC1,W,0
-        call    C18_strlib_toupper        
+        ICALL   L18_strlib_toupper        
         subwf   R0+1,W,0
-        bnc     C18_strcasecmp_smaller
-        bz      C18_strcasecmp_checkend
-C18_strcasecmp_larger   
+        bnc     L18_strcasecmp_smaller
+        bz      L18_strcasecmp_checkend
+L18_strcasecmp_larger   
         incf    R0,F,0
         return  0
-C18_strcasecmp_smaller
+L18_strcasecmp_smaller
         decf    R0,F,0
         return  0
-C18_strcasecmp_checkend
+L18_strcasecmp_checkend
         movf    INDF1,W,0
-        bnz     C18_strcasecmp_loop
+        bnz     L18_strcasecmp_loop
         return  0        
-;<?strlib_toupper>
+X18_strcasecmp        
+;<?L18_strlib_toupper>
 ;<->
 
 
@@ -262,14 +268,15 @@ C18_strcasecmp_checkend
 
 ; convert ASCII code in W to upper case
 ; 10 bytes
-;<+strlib_toupper>
-C18_strlib_toupper
+;<+L18_strlib_toupper>
+L18_strlib_toupper
         addlw   255 - 'z'
         addlw   ('z'-'a')+1
-        bnc     C18_strlib_toupper_end
+        bnc     L18_strlib_toupper_end
         addlw   'A'-'a'
-C18_strlib_toupper_end
+L18_strlib_toupper_end
         return  0
+X18_strlib_toupper
 ;<->
 
 
@@ -277,14 +284,15 @@ C18_strlib_toupper_end
 
 ; convert ASCII code in W to lower case
 ; 10 bytes
-;<+strlib_tolower>
-C18_strlib_tolower
+;<+L18_strlib_tolower>
+L18_strlib_tolower
         addlw   255 - 'Z'
         addlw   ('Z'-'A')+1
         bnc     C18_strlib_tolower_end
         addlw   'a'-'A'
-C18_strlib_tolower_end
+L18_strlib_tolower_end
         return  0
+X18_strlib_tolower        
 ;<->
 
 
@@ -294,7 +302,7 @@ C18_strlib_tolower_end
 ; comparing at most n characters
 ;
 ; char *strncasecmp(char *s1, char *s2, size_t n)
-; 78 bytes (+10 bytes for shared strlib_toupper)
+; 78 bytes (+10 bytes for shared L18_strlib_toupper)
 ;<+C18_strncasecmp>
 C18_strncasecmp
         clrf    R0,0
@@ -314,30 +322,31 @@ C18_strncasecmp
         movff   PLUSW0,FSR2L     
         movff   INDF0,FSR2H         
                    
-C18_strncasecmp_loop
+L18_strncasecmp_loop
         incf    R1,F,0
-        bnz     C18_strncasecmp_cont
+        bnz     L18_strncasecmp_cont
         incf    R1+1,F,0
-        bz      C18_strncasecmp_end
-C18_strncasecmp_cont        
+        bz      L18_strncasecmp_end
+L18_strncasecmp_cont        
         movf    POSTINC2,W,0
-        rcall   C18_strlib_toupper
+        ICALL   L18_strlib_toupper
         movwf   R0+1,0
         movf    POSTINC1,W,0
-        rcall   C18_strlib_toupper        
+        ICALL   L18_strlib_toupper        
         subwf   R0+1,W,0
-        bnc     C18_strncasecmp_smaller
-        bz      C18_strncasecmp_checkend
-C18_strncasecmp_larger   
+        bnc     L18_strncasecmp_smaller
+        bz      L18_strncasecmp_checkend
+L18_strncasecmp_larger   
         incf    R0,F,0
         return  0
-C18_strncasecmp_smaller
+L18_strncasecmp_smaller
         decf    R0,F,0
         return  0
-C18_strncasecmp_checkend
+L18_strncasecmp_checkend
         movf    INDF1,W,0
-        bnz     C18_strncasecmp_loop
-C18_strncasecmp_end        
+        bnz     L18_strncasecmp_loop
+L18_strncasecmp_end        
         return  0        
-;<?strlib_toupper>
+X18_strncasecmp        
+;<?L18_strlib_toupper>
 ;<->

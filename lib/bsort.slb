@@ -51,7 +51,7 @@
 ; size:   size of a single element (1..127 bytes)
 ; cmpfun: function returning a value>0 if e1>e2 
 ;
-; 148 bytes
+; 146 bytes
 :
 ; register use: 
 ;   FSR1  *data (incremented in inner loop)
@@ -77,7 +77,7 @@
 ;  7  e2H
 ;<+C18_bsort>
 C18_bsort        
-C18_bsort_outerloop        
+L18_bsort_outerloop        
         clrf    R1,0            ; clear swap flag
         movlw   -3
         movff   PLUSW0,FSR2L    ; FSR2 = loop counter = length
@@ -89,10 +89,10 @@ C18_bsort_outerloop
         movff   PLUSW0,FSR1L    ; FSR1 = start of array
         movff   INDF0,FSR1H 
         
-C18_bsort_innerloop        
+L18_bsort_innerloop        
         movf    POSTDEC2,0      ; FSR2--
         btfsc   FSR2H,3,0       ; FSR2<0? (FSR2=0x0fff on wrap-around)
-        bra     C18_bsort_innerloop_end
+        IBRA    L18_bsort_innerloop_end
         
         movlw   -4
         movff   PLUSW0,R0+1     ; element size
@@ -135,33 +135,33 @@ C18_bsort_innerloop
 
         ; --- check comparison result
         comf    R0,F,0
-        bn      C18_bsort_dont_swap
+        bn      L18_bsort_dont_swap
                 
         ; --- swap data
-C18_bsort_swap        
+L18_bsort_swap        
         movwf   R0,0              ; counter & offset (PLUSW1) are equal
-C18_bsort_swap_loop               ; swap & FSR1 += size
+L18_bsort_swap_loop               ; swap & FSR1 += size
         movff   PLUSW1,R0+1
         movff   INDF1,PLUSW1
         movff   R0+1,POSTINC1        
         
         decf    R0,F,0
-        bnz     C18_bsort_swap_loop        
+        bnz     L18_bsort_swap_loop        
         
         bsf     R1,1,0            ; set swap flag        
-        bra     C18_bsort_innerloop                
+        IBRA    L18_bsort_innerloop                
         
-C18_bsort_dont_swap               ; FSR1 += size
+L18_bsort_dont_swap               ; FSR1 += size
         addwf   FSR1L,F,0         ;   W contains size
         btfsc   STATUS,C        
         incf    FSR1H,F,0       
-        bra     C18_bsort_innerloop                                     
+        IBRA    L18_bsort_innerloop                                     
         
-C18_bsort_innerloop_end
+L18_bsort_innerloop_end
         movf    R1,W,0            ; swap flag set?
-        bnz     C18_bsort_outerloop ;yes, repeat
+        bnz     L18_bsort_outerloop ;yes, repeat
         return  0
-                
+X18_bsort                
 ;<?indirect_call>        
 ;<->
         

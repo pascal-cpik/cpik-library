@@ -48,10 +48,10 @@
 ;
 ; data:   address of first array element
 ; length: number of elements in array
-; size:   size of a single element (1..127 bytes)
+; size:   size of a single element 
 ; cmpfun: function returning a value>0 if e1>e2
 ;
-; 372 bytes
+; 364 bytes
 :
 ; register use:
 ;
@@ -92,12 +92,12 @@ C18_csort
         movff   PLUSW0,R0
         movlw   -2-2
         movff   PLUSW0,R0+1
-        call    mul16
+        ICALL   mul16
         movlw   -1-2
         movff   PLUSW0,R0
         movlw   0-2
         movff   PLUSW0,R0+1
-        call    add16           ; by now the end pointer (stop value) is on the stack 
+        ICALL   add16           ; by now the end pointer (stop value) is on the stack 
 
         movf    PREINC0,F,0     ; allocate space for swap flag
 
@@ -162,7 +162,7 @@ L18_csort_gap_ok
         movlw   -9-5            
         movff   PLUSW0,PREINC0  ; push sizeL onto stack
         movff   PLUSW0,PREINC0  ; push sizeH onto stack        
-        call    mul16           ; multiply with R0 (gap size)
+        ICALL   mul16           ; multiply with R0 (gap size)
         
         ; --- e1 = data, e2 = e1 + gap * size
         movlw   -11-1           ; add data
@@ -173,7 +173,7 @@ L18_csort_gap_ok
         movff   PLUSW0,R0+1
         movlw   -11+7
         movff   R0+1,PLUSW0     ; copy data ptrH to e1H
-        call    add16           ; by now ptr to e2 is on stack
+        ICALL   add16           ; by now ptr to e2 is on stack
         movlw   -11+9+1
         movff   POSTDEC0,PLUSW0 ; copy e2 to proper place
         movlw   -10+8+1
@@ -185,7 +185,7 @@ L18_csort_innerloop
         movff   PLUSW0,PREINC0  ; copy cmpfun pointer
         movff   PLUSW0,PREINC0
                 
-        call    indirect_call   ; e1,e2,cmpfun already set
+        ICALL   indirect_call   ; e1,e2,cmpfun already set
 
         movlw   -9-5            ; R1:R1+1 = size (used later)
         movff   PLUSW0,R1       
@@ -223,7 +223,7 @@ L18_csort_swap_loop_start
         bnz     L18_csort_swap_loop
         incf    R1+1,F,0
         bnz     L18_csort_swap_loop
-        bra     L18_csort_innerloop_checkend
+        IBRA    L18_csort_innerloop_checkend
         
 L18_csort_dont_swap               
         ; --- increment e1, e2 by size
@@ -276,12 +276,16 @@ L18_csort_innerloop_end
         movlw   -9+3
         movf    PLUSW0,W,0               ; swap flag set?
         bnz     L18_csort_goto_outerloop ; yes, repeat
-        return  0
+
+        movlw   9
+        IBRA    cleanstack1             ; call & return
 
 L18_csort_goto_outerloop
-        goto    L18_csort_outerloop     ; "long" jump
+        IBRA    L18_csort_outerloop     ; "long" jump
+X18_csort
         
 ;<?mul16>
 ;<?add16>
+;<?cleanstack1>
 ;<?indirect_call>
 ;<->

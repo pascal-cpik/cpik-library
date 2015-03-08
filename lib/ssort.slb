@@ -1,0 +1,340 @@
+;   Copyright (C) 2015, Pascal Niklaus pascal@niklaus.org
+;
+;   This file is part of the CPIK library
+;   -----------------------------------------------------------------------
+;   This library is free software; you can redistribute it and/or modify it
+;   under the terms of the GNU General Public License as published by the
+;   Free Software Foundation; either version 2.1, or (at your option) any
+;   later version.
+
+;   This library is distributed in the hope that it will be useful,
+;   but WITHOUT ANY WARRANTY; without even the implied warranty of
+;   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;   GNU General Public License for more details.
+
+;   You should have received a copy of the GNU General Public License
+;   along with this library; see the file COPYING. If not, write to the
+;   Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
+;   MA 02110-1301, USA.
+
+;   As a special exception, if you link this library with other files,
+;   some of which are compiled with CPIK, to produce an executable,
+;   this library does not by itself cause the resulting executable to
+;   be covered by the GNU General Public License. This exception does
+;   not however invalidate any other reasons why the executable file
+;   might be covered by the GNU General Public License.
+
+;   VERSION 0.1
+;
+;   HISTORY
+;   - 02-03-2015 created by P. Niklaus 
+
+;   CONTENTS
+;
+;   C18_ssort
+;
+;   -----------------------------------------------------------------------
+
+; Shell sort
+;
+; Implementation of the "shell sort" algorithm for arbitrary structures. Element
+; and vector sizes are only limited by RAM size.
+; This algorithm is more performant than basic bubble and comb sort, at least for
+; large arrays.
+;
+; void ssort(void *data, size_t length, size_t size, char *(cmpfun)(void *e1, *e2), )
+;
+; data:   address of first array element
+; length: number of elements in array
+; size:   size of a single element 
+; cmpfun: function returning a value>0 if e1>e2
+;
+; 366 bytes (depending on jump optimisation)
+:
+; register use:
+;
+; Stack during execution:
+;
+; -------------------- arguments when called
+; -7  cmpfuncL
+; -6  cmdfuncH
+; -5  sizeL
+; -4  sizeH
+; -3  lengthL
+; -2  lengthH
+; -1  dataL
+;  0  dataH
+; -------------------- inner loop vars
+;  1  counter for comb_loop-L
+;  2  counter for comb_loop-H
+;  3  k-counter          
+;  4  gapL             gap in bytes (gap[k])
+;  5  gapH
+;  6  e0               comp ptr 
+;  7  e0
+; -------------------- arguments for cmpfun call
+;  8  e1L
+;  9  e1H
+; 10  e2L
+; 11  e2H          <- FSR0 during loop execution
+; 12  cmdfuncL
+; 13  cmdfuncH     
+; --------- arguments/results of mul16 / add16
+; 14  resultL/argL
+; 15  resultH/argH <- FSR0 during ptr calculations
+
+; Equivalent C code
+;
+; void ssort(void *data, size_t length, size_t size, char (*cmpfun)(void *e1, void *e2) )
+; {
+;   int k, gap, n;
+;   uint8_t *e0;
+;   uint8_t *e1;
+;   uint8_t *e2;
+;     
+;   k=htablen();
+;   
+;   for(;;) {                      // ----- L18_ssort_gap_loopgap-loop
+;     if(--k <0)
+;       break;  
+;     gap = htab[k];               // h*=size
+;         
+;     n = -(length-gap)-1;
+;     gap *= size;
+;         
+;     e0 = (uint8_t *)data;
+;     
+;     for(;;) {                    // ----- L18_ssort_comb_loop 
+;       if(++n >= 0)
+;         break;      
+;       
+;       e1 = e2 = e0 + gap;            
+;             
+;       for(;;) {                  // ----- L18_ssort_while        
+;         e1 -= gap;          
+;         if(e1 < (uint8_t *)data) 
+;           break;
+;         if(cmpfun((void *)e1,(void *)e2)>0) 
+;           swapu16((uint16_t *)e1,(uint16_t *)e2);
+;         else
+;           break;                          
+;         e2 -= gap;  
+;       }            
+;       e0 += size;
+;     } 
+;   }
+; }
+
+;<+C18_ssort>
+C18_ssort
+        movf    PREINC0,F,0     ; allocate space for comb counter
+        movf    PREINC0,F,0
+
+        movlw   (L18_ssort_gaptable_end-L18_ssort_gaptable)/2
+        movwf   PREINC0,0       ; push k-counter
+        
+        movlw   8               ; alloc space for gap,e0,e1,e2
+        ICALL   makestack1
+                
+L18_ssort_gap_loop        
+        movlw   -11+3
+        decf    PLUSW0,F,0      ; decrement k
+        bnn     L18_ssort_gap_loop_dont_exit
+        IBRA    L18_ssort_gap_loop_exit                
+        
+L18_ssort_gap_loop_dont_exit                        
+        rlncf   PLUSW0,W,0      ; W = 2 * k
+L18_ssort_getgap_loop        
+        addlw   LOW(L18_ssort_gaptable)
+        movwf   TBLPTRL,0
+        movlw   HIGH(L18_ssort_gaptable)
+        btfsc   STATUS,C        
+        addlw   1
+        movwf   TBLPTRH,0
+        clrf    TBLPTRU,0
+
+        tblrd*+                     
+        movff   TABLAT,R0 
+        tblrd*+
+        movff   TABLAT,R0+1     ; R0:R0+1 = gapL:gapH
+
+        ; --- determine comb loop counter
+        movlw   -11-3
+        movff   PLUSW0,PREINC0  ; push lengthL_H onto stack
+        movff   PLUSW0,PREINC0
+        
+        ICALL   sub16
+        
+        movlw   -13+2+1
+        movff   POSTDEC0,PLUSW0
+        movff   POSTDEC0,PLUSW0
+
+        movlw   -11+1           ; complement counter
+        comf    PLUSW0,F,0
+        movlw   -11+2
+        comf    PLUSW0,F,0
+
+        ; --- calculate gap in bytes (R0 is still gap)
+        movlw   -11-5    
+        movff   PLUSW0,PREINC0
+        movff   PLUSW0,PREINC0    ; push sizeL:sizeH to stack
+        ICALL   mul16           ; multiply with R0 (gap size)     
+        movff   POSTDEC0,R0H
+        movff   POSTDEC0,R0L
+
+        movlw   -11+4           ; copy result back to gap 
+        ICALL   R02LOCAL
+
+        movlw   -11-1           ; push data, 
+        movff   PLUSW0,PREINC0
+        movff   PLUSW0,PREINC0
+                
+        movlw   -13+2+6         ; set e0 = data 
+        movff   POSTDEC0,PLUSW0
+        movff   POSTDEC0,PLUSW0
+        
+; ------ start of comb for loop ----------                
+
+L18_ssort_comb_loop 
+        movlw   -11+1           ; increment comb counter
+        incf    PLUSW0,F,0
+        movlw   -11+2    
+        bnz     L18_ssort_comb_1
+        incf    PLUSW0,F,0               
+L18_ssort_comb_1   
+        movf    PLUSW0,W,0      ; comb counter >= 0
+        bnn     L18_ssort_gap_loop  ; -> move to next gap size
+        
+        ICALL   L18_ssort_gapToR0        
+
+        movlw   -11+6           ; e0 -> TODS
+        movff   PLUSW0,PREINC0
+        movff   PLUSW0,PREINC0
+        
+        ICALL   add16 
+        movff   POSTDEC0,R0+1
+        movff   POSTDEC0,R0
+        
+        movlw   -11+8           ; e1 = e0 + gap
+        ICALL   R02LOCAL
+        movlw   -11+10          ; e2 = e0 + gap
+        ICALL   R02LOCAL
+        
+; ---------- inner while loop -------------
+L18_ssort_while        
+        ICALL   L18_ssort_gapToR0        
+        movlw   -11+8            ; e1 -= gap*size 
+        movff   PLUSW0,PREINC0
+        movff   PLUSW0,PREINC0
+                
+        ICALL   sub16
+        movlw   -13+2+8
+        movff   INDF0,R0+1      ; store result also in R0/R1
+        movff   POSTDEC0,PLUSW0 ; because we can't compare
+        movff   INDF0,R0        ; data <-> e1 directly
+        movff   POSTDEC0,PLUSW0
+        
+        movf    R0+1,W,0
+        bn      L18_ssort_while_exit ; if e1 negative -> break! 
+                        
+        movlw   -11-1           ; DATA-R0 < 0 -> break
+        movf    PLUSW0,W,0
+        subwf   R0,F,0           
+        movlw   -11-0
+        movf    PLUSW0,W,0
+        subwfb  R0+1,F,0
+        bnc     L18_ssort_while_exit ;c=0 -> borrow occured
+
+        ; --- compare *e1, *e2
+        movlw   -11-7
+        movff   PLUSW0,PREINC0  ; push function pointer
+        movff   PLUSW0,PREINC0
+
+        ICALL   indirect_call   ; e1,e2,cmpfun already set
+        
+        ; --- check comparison result
+        ;movf    R0,W,0        
+        ;bz      L18_ssort_while_exit
+        ;bnn     L18_ssort_while_exit
+        comf    R0,0
+        bn      L18_ssort_while_exit
+
+        movlw   -11-5            ;R1:R1+1 = size (used later)
+        movff   PLUSW0,R1       
+        movlw   -11-4           
+        movff   PLUSW0,R1+1
+
+        movlw   -11+8           ;copy e1/e2 to FSR1/2 
+        ICALL   getLOCALPTR     ;FSR1 = e1
+        movlw   -11+10
+        movff   PLUSW0,FSR2L    ;FSR2 = e2
+        movlw   -11+11
+        movff   PLUSW0,FSR2H
+        
+L18_ssort_swap
+        comf    R1,F,0
+        comf    R1+1,F,0
+        bra     L18_ssort_swap_loop_start
+        
+L18_ssort_swap_loop             ; swap *FSR1 and *FSR1, len = size (in R1/R1+1), R0+1 = temporary
+        movff   INDF1,R0+1
+        movff   INDF2,POSTINC1
+        movff   R0+1,POSTINC2
+L18_ssort_swap_loop_start
+        incf    R1,F,0
+        bnz     L18_ssort_swap_loop
+        incf    R1+1,F,0
+        bnz     L18_ssort_swap_loop
+        
+        ICALL   L18_ssort_gapToR0 ; e2 -= gap*size         
+        movlw   -11+10          
+        movff   PLUSW0,PREINC0
+        movff   PLUSW0,PREINC0                
+        ICALL   sub16
+        movlw   -13+2+10
+        movff   POSTDEC0,PLUSW0 
+        movff   POSTDEC0,PLUSW0
+        
+        IBRA    L18_ssort_while
+
+L18_ssort_while_exit        
+
+; ------ end of inner while loop ----------                
+
+        movlw   -11-5             ; R0 = size
+        ICALL   LOCAL2R0
+        movlw   -11+6             ; e0 -> TODS
+        movff   PLUSW0,PREINC0
+        movff   PLUSW0,PREINC0
+        ICALL   add16
+        movlw   -13+2+6           ; TODS -> e0
+        movff   POSTDEC0,PLUSW0
+        movff   POSTDEC0,PLUSW0
+
+        bra     L18_ssort_comb_loop 
+
+; ------ end of comb for loop ----------        
+        
+L18_ssort_gap_loop_exit
+        movlw   9
+        IBRA    cleanstack1             ; call & return
+
+L18_ssort_gapToR0
+        movlw   -11+4  
+        IBRA    LOCAL2R0                ; call & return
+
+L18_ssort_gaptable
+        DW      1,4,13,40,121,364,1093,3280  ; table with gaps
+L18_ssort_gaptable_end
+X18_ssort
+        
+;<?mul16>
+;<?add16>
+;<?sub16>
+;<?makestack1>
+;<?cleanstack1>
+;<?getLOCALPTR>
+;<?LOCAL2R0>
+;<?R02LOCAL>
+;<?indirect_call>
+;<->
