@@ -151,7 +151,7 @@ L18_csort_gapR1ok
         movf    R0,W,0          ; R0 = max(1,R0)
         iorwf   R0+1,W,0
         bnz     L18_csort_gap_ok
-        incf    R0,0
+        incf    R0,F,0
 L18_csort_gap_ok
         movlw   -9+4
         movff   R0,PLUSW0
@@ -176,7 +176,6 @@ L18_csort_gap_ok
         ICALL   add16           ; by now ptr to e2 is on stack
         movlw   -11+9+1
         movff   POSTDEC0,PLUSW0 ; copy e2 to proper place
-        movlw   -10+8+1
         movff   POSTDEC0,PLUSW0
 
         ; --- sweep over datav vector, comparing *e1 and *e2
