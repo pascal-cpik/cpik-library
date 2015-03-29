@@ -121,14 +121,14 @@ C18_memmove_entry_from_memshift_backward
         movf    R1+1,W,0
         btfsc   STATUS,C
         incf    R1+1,W,0
-        addwf   FSR1H+1,F
+        addwf   FSR1H,F
 
         movf    R1,W,0          ; FSR2 += block length (R1)
         addwf   FSR2L,F
         movf    R1+1,W,0
         btfsc   STATUS,C
         incf    R1+1,W,0
-        addwf   FSR2H+1,F
+        addwf   FSR2H,F
 
         comf    R1,f,0           ; complement counter
         comf    R1+1,f,0         ; in loop, we count upwards to 0
@@ -161,13 +161,12 @@ C18_memmove_start
 ; shift:  number of elements by which data is to be shifted (-128..+127, e.g. -3 = 3 positions backwards)
 ; blklen: number of elements to be copied (0..255)
 ; size:   size of single array element (0..255)
-;                  0 -1         -2            -3             -4               -5 
-; void C18_xmemshift(void *vec, uint8_t offset, int8_t shift, int8_t blklen, uint8_t size)
+;                    0 -1       -2              -3            -4              -5 
+; void C18_xmemshift(void *vec, uint8_t offset, int8_t shift, uint8_t blklen, uint8_t size)
 ;
 ; 86 bytes (+70 bytes from C18_memmove, +24 from C18_memcpy, +40 from C18_memmovecopy_args)
 ;<+C18_xmemshift>
-C18_xmemshift
-          
+C18_xmemshift          
           movlw   -5              ; R0 = size (temporary, used many times) 
           movff   PLUSW0,R0       
  
@@ -181,7 +180,7 @@ C18_xmemshift
           movwf   FSR1L,0
           movf    INDF0,W,0       ; vec_H
           btfsc   STATUS,C        
-          incf    INDF0,W       
+          incf    INDF0,W,0       
           addwf   PRODH,W,0
           movwf   FSR1H,0
                                       
@@ -196,7 +195,7 @@ C18_xmemshift
           mulwf   R0,0            ; * size         
           bnn     C18_xmemshift_pos ; N not modified by mulwf
           movf    R0,W,0          ; shift if negative
-          subwf   PRODH,F         ; -> subtract size from PRODH
+          subwf   PRODH,F,0       ; -> subtract size from PRODH
 C18_xmemshift_pos
           movf    PRODL,W,0       ; ...and add to FSR1 -> store in FSR2 
           addwf   FSR1L,W,0
