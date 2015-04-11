@@ -30,6 +30,8 @@
 ;   HISTORY
 ;   - 26-02-2015 created by P. Niklaus 
 ;   - 28-02-2015 adapted to 16bit structure size
+;   - 11-04-2015 added check for array length < 2 (nothing to sort)
+;                check later whether this could be integrated in loop code
 
 ;   CONTENTS
 ;
@@ -51,7 +53,7 @@
 ; size:   size of a single element 
 ; cmpfun: function returning a value>0 if e1>e2
 ;
-; 364 bytes
+; 372 bytes
 :
 ; register use:
 ;
@@ -84,14 +86,21 @@
 ; 13  resultH/argH <- FSR0 during ptr calculations
 
 ;<+C18_csort>
-C18_csort
+C18_csort       
+        movlw   -3
+        movff   PLUSW0,R0       ;lengthL
+        movlw   -2
+        movf    PLUSW0,W,0      ;lengthH
+        movwf   R0+1,0          ; do it in two steps to set Z set
+        IBNZ    L18_csort_lenok ; lengthH != 0, sorting required
+        movlw   2               
+        subwf   R0,0 
+        IBC     L18_csort_lenok ; lengthL>1, sorting required
+        return  0               ; no sorting required 
+L18_csort_lenok        
         movlw   -5              ; push size onto stack
         movff   PLUSW0,PREINC0
         movff   PLUSW0,PREINC0
-        movlw   -3-2
-        movff   PLUSW0,R0
-        movlw   -2-2
-        movff   PLUSW0,R0+1
         ICALL   mul16
         movlw   -1-2
         movff   PLUSW0,R0
