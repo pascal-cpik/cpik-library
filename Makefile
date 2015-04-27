@@ -10,7 +10,7 @@ SHELL := /bin/bash
 PROC = 18f4520
 
 FILES := sim 
-LOCALSLBS = memcpymove.slb strcmp.slb bsort.slb csort.slb ssort.slb
+LOCALSLBS = memcpymove.slb strcmp.slb sort.slb bcd.slb
 
 LIBS = $(LOCALSLBS:%=lib/%)
 
@@ -34,9 +34,9 @@ OBJS = $(SOURCES:.c=.slb)
 ASM     = $(PROG:.hex=.asm)
 LST     = $(PROG:.hex=.lst)
 
-CC = cpik
-AS = cpik
-LD = cpik 
+CC = /usr/bin/cpik-0.7.4
+AS = /usr/bin/cpik-0.7.4
+LD = /usr/bin/cpik-0.7.4
 
 CFLAGS = -p$(PROC) -I /usr/share/cpik/0.7.3/include/device
 ASFLAGS = -a 

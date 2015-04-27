@@ -54,11 +54,11 @@ C18_strlen
         movlw   -1             ; copy s to FSR1
         movff   PLUSW0,FSR1L     
         movff   INDF0,FSR1H         
-        movwf   R0,0           ; take advantage that w=0xff
-        movwf   R0+1,0        
+        movwf   _r0,0           ; take advantage that w=0xff
+        movwf   _r0+1,0        
 L18_strlen_loop
-        infsnz  R0,F,0
-        incf    R0+1,F,0
+        infsnz  _r0,F,0
+        incf    _r0+1,F,0
         movf    POSTINC1,W,0
         bnz     L18_strlen_loop                  
         return  0
@@ -84,10 +84,10 @@ C18_strcpy
         movlw   -1             ; copy dest to FSR2 and R
         movf    PLUSW0,W,0
         movwf   FSR2L,0     
-        movwf   R0,0
+        movwf   _r0,0
         movf    INDF0,W,0
         movwf   FSR2H,0
-        movwf   R0+1,0
+        movwf   _r0+1,0
 L18_strcpy_entry_from_strcat
 L18_strcpy_loop
         movf    POSTINC1,W,0
@@ -115,10 +115,10 @@ C18_strcat
         movlw   -1             ; copy dest to FSR2 and R
         movf    PLUSW0,W,0
         movwf   FSR2L,0
-        movwf   R0,0
+        movwf   _r0,0
         movf    INDF0,W,0
         movwf   FSR2H,0         
-        movwf   R0+1,0
+        movwf   _r0+1,0
                 
 L18_strcat_loop
         movf    POSTINC2,W,0        
@@ -143,7 +143,7 @@ X18_strcat
 ; 46 bytes
 ;<+C18_strcmp>
 C18_strcmp
-        clrf    R0,0
+        clrf    _r0,0
         movlw   -3               ; copy src to FSR1
         movff   PLUSW0,FSR1L
         movlw   -2
@@ -159,10 +159,10 @@ L18_strcmp_loop
         bnc     L18_strcmp_smaller
         bz      L18_strcmp_checkend
 L18_strcmp_larger   
-        incf    R0,F,0
+        incf    _r0,F,0
         return  0
 L18_strcmp_smaller
-        decf    R0,F,0
+        decf    _r0,F,0
         return  0
 L18_strcmp_checkend
         movf    INDF1,W,0
@@ -181,13 +181,13 @@ X18_strcmp
 ; 70 bytes
 ;<+C18_strncmp>
 C18_strncmp
-        clrf    R0,0
+        clrf    _r0,0
         movlw   -5                ; R1 is n
-        movff   PLUSW0,R1
+        movff   PLUSW0,_r1
         movlw   -4
-        movff   PLUSW0,R1+1        
-        comf    R1,F,0
-        comf    R1+1,F,0
+        movff   PLUSW0,_r1+1        
+        comf    _r1,F,0
+        comf    _r1+1,F,0
                 
         movlw   -3               ; copy src to FSR1
         movff   PLUSW0,FSR1L
@@ -199,9 +199,9 @@ C18_strncmp
         movff   INDF0,FSR2H         
                    
 L18_strncmp_loop
-        incf    R1,F,0
+        incf    _r1,F,0
         bnz     L18_strncmp_cont
-        incf    R1+1,F,0
+        incf    _r1+1,F,0
         bz      L18_strncmp_end
 L18_strncmp_cont        
         movf    POSTINC1,W,0
@@ -209,10 +209,10 @@ L18_strncmp_cont
         bnc     L18_strncmp_smaller
         bz      L18_strncmp_checkend
 L18_strncmp_larger   
-        incf    R0,F,0
+        incf    _r0,F,0
         return  0
 L18_strncmp_smaller
-        decf    R0,F,0
+        decf    _r0,F,0
         return  0
 L18_strncmp_checkend
         movf    INDF1,W,0
@@ -230,7 +230,7 @@ X18_strncmp
 ; 54 bytes (+10 bytes for shared L18_strlib_toupper)
 ;<+C18_strcasecmp>
 C18_strcasecmp
-        clrf    R0,0
+        clrf    _r0,0
         movlw   -3               ; copy src to FSR1
         movff   PLUSW0,FSR1L
         movlw   -2
@@ -243,17 +243,17 @@ C18_strcasecmp
 L18_strcasecmp_loop
         movf    POSTINC2,W,0
         ICALL   L18_strlib_toupper
-        movwf   R0+1,0
+        movwf   _r0+1,0
         movf    POSTINC1,W,0
         ICALL   L18_strlib_toupper        
-        subwf   R0+1,W,0
+        subwf   _r0+1,W,0
         bnc     L18_strcasecmp_smaller
         bz      L18_strcasecmp_checkend
 L18_strcasecmp_larger   
-        incf    R0,F,0
+        incf    _r0,F,0
         return  0
 L18_strcasecmp_smaller
-        decf    R0,F,0
+        decf    _r0,F,0
         return  0
 L18_strcasecmp_checkend
         movf    INDF1,W,0
@@ -305,13 +305,13 @@ X18_strlib_tolower
 ; 78 bytes (+10 bytes for shared L18_strlib_toupper)
 ;<+C18_strncasecmp>
 C18_strncasecmp
-        clrf    R0,0
+        clrf    _r0,0
         movlw   -5                ; R1 is n
-        movff   PLUSW0,R1
+        movff   PLUSW0,_r1
         movlw   -4
-        movff   PLUSW0,R1+1        
-        comf    R1,F,0
-        comf    R1+1,F,0
+        movff   PLUSW0,_r1+1        
+        comf    _r1,F,0
+        comf    _r1+1,F,0
                 
         movlw   -3               ; copy src to FSR1
         movff   PLUSW0,FSR1L
@@ -323,24 +323,24 @@ C18_strncasecmp
         movff   INDF0,FSR2H         
                    
 L18_strncasecmp_loop
-        incf    R1,F,0
+        incf    _r1,F,0
         bnz     L18_strncasecmp_cont
-        incf    R1+1,F,0
+        incf    _r1+1,F,0
         bz      L18_strncasecmp_end
 L18_strncasecmp_cont        
         movf    POSTINC2,W,0
         ICALL   L18_strlib_toupper
-        movwf   R0+1,0
+        movwf   _r0+1,0
         movf    POSTINC1,W,0
         ICALL   L18_strlib_toupper        
-        subwf   R0+1,W,0
+        subwf   _r0+1,W,0
         bnc     L18_strncasecmp_smaller
         bz      L18_strncasecmp_checkend
 L18_strncasecmp_larger   
-        incf    R0,F,0
+        incf    _r0,F,0
         return  0
 L18_strncasecmp_smaller
-        decf    R0,F,0
+        decf    _r0,F,0
         return  0
 L18_strncasecmp_checkend
         movf    INDF1,W,0

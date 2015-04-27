@@ -48,13 +48,13 @@
 C18_toBCD           
                     movf    INDF0,W,0     ; get binary number (0..99)
                     ICALL   divWby10   
-                    movwf   R0,0          ; R0 = n/10
+                    movwf   _r0,0          ; R0 = n/10
                     movlw   10        
-                    mulwf   R0,0          ; prodl = R0*10
-                    swapf   R0,F,0        ; move to upper digit
+                    mulwf   _r0,0          ; prodl = R0*10
+                    swapf   _r0,F,0        ; move to upper digit
                     movf    PRODL,W,0     
                     subwf   INDF0,W,0     ; n - (n/10)*10
-                    iorwf   R0,F,0        ; ior into R0
+                    iorwf   _r0,F,0        ; ior into R0
                     return
 X18_toBCD
 
@@ -62,33 +62,33 @@ X18_toBCD
 ;<->
 
 ;<+divWby10>    
-divWby10            movwf   R1+1,0        ; store n
+divWby10            movwf   _r1+1,0        ; store n
                     bcf     STATUS,C,0
                     rrcf    WREG,F,0      ; W = n/2
-                    movwf   R1,0          ; 
+                    movwf   _r1,0          ; 
                     bcf     STATUS,C,0
-                    rrcf    R1,F,0        ; R1 = n/4
-                    addwf   R1,F,0        ; R1 += W
-                    movf    R1,W,0
+                    rrcf    _r1,F,0        ; R1 = n/4
+                    addwf   _r1,F,0        ; R1 += W
+                    movf    _r1,W,0
                     swapf   WREG,F,0
                     andlw   0x0f          ; W = R1>>4
-                    addwf   R1,F,0        ; R1 += W
+                    addwf   _r1,F,0        ; R1 += W
                     bcf     STATUS,C,0
-                    rrcf    R1,F,0
+                    rrcf    _r1,F,0
                     bcf     STATUS,C,0
-                    rrcf    R1,F,0
+                    rrcf    _r1,F,0
                     bcf     STATUS,C,0    
-                    rrcf    R1,F,0        ; q >>= 3
+                    rrcf    _r1,F,0        ; q >>= 3
                     bcf     STATUS,C,0    
-                    rlcf    R1,W,0        
+                    rlcf    _r1,W,0        
                     rlcf    WREG,F,0      ; C is certainly 0, no need to clear C
-                    addwf   R1,W,0
+                    addwf   _r1,W,0
                     bcf     STATUS,C,0
                     rlcf    WREG,F,0
-                    subwf   R1+1,W,0 
+                    subwf   _r1+1,W,0 
                     addlw   255-9
                     movlw   0
-                    addwfc  R1,W,0
+                    addwfc  _r1,W,0
                     return  0
 ;<->
 
@@ -104,13 +104,13 @@ divWby10            movwf   R1+1,0        ; store n
 C18_fromBCD         
                     swapf   INDF0,W,0     ; get upper digit
                     andlw   0x0f
-                    movwf   R0,0   
+                    movwf   _r0,0   
                     movlw   10        
-                    mulwf   R0,0          ; prodl = R0*10
+                    mulwf   _r0,0          ; prodl = R0*10
                     movf    INDF0,W,0
                     andlw   0x0f          ; lower digit
                     addwf   PRODL,W,0
-                    movwf   R0,0
+                    movwf   _r0,0
                     return  0
 X18_fromBCD
                     

@@ -50,16 +50,16 @@
 C18_memcpy
         call    C18_memmovecopy_args
 C18_memcpy_forward
-        comf    R1,f,0           ; complement counter
-        comf    R1+1,f,0         ; in loop, we count upwards to 0
+        comf    _r1,f,0           ; complement counter
+        comf    _r1+1,f,0         ; in loop, we count upwards to 0
         bra     C18_memcpy_start
 
 C18_memcpy_loop
         movff   POSTINC1,POSTINC2 ; forward copy
 C18_memcpy_start
-        incf    R1,F,0          ; last byte reached?
+        incf    _r1,F,0          ; last byte reached?
         bnz     C18_memcpy_loop
-        incf    R1+1,F,0        ;   (R1 reaches 0)
+        incf    _r1+1,F,0        ;   (R1 reaches 0)
         bnz     C18_memcpy_loop ; no, continue loop
         return  0
 ;<?C18_memmovecopy_args>
@@ -80,15 +80,15 @@ C18_memmovecopy_args
         movlw   -1              ; copy dest to FSR2 and R0
         movf    PLUSW0,W,0      ; (return value is dest)
         movwf   FSR2L,0         
-        movwf   R0,0
+        movwf   _r0,0
         movf    INDF0,W,0
         movwf   FSR2H,0
-        movwf   R0+1,0
+        movwf   _r0+1,0
 
         movlw   -5              ; number of bytes to copy
-        movff   PLUSW0,R1
+        movff   PLUSW0,_r1
         movlw   -4
-        movff   PLUSW0,R1+1
+        movff   PLUSW0,_r1+1
         return  0
 ;<->
 
@@ -116,22 +116,22 @@ C18_memmove
         IBNC_FAR C18_memcpy_forward  ; copy forwards as in strcpy
         
 C18_memmove_entry_from_memshift_backward         
-        movf    R1,W,0          ; copy backwards                                
+        movf    _r1,W,0          ; copy backwards                                
         addwf   FSR1L,F         ; FSR1 += block length (R1)
-        movf    R1+1,W,0
+        movf    _r1+1,W,0
         btfsc   STATUS,C
-        incf    R1+1,W,0
+        incf    _r1+1,W,0
         addwf   FSR1H,F
 
-        movf    R1,W,0          ; FSR2 += block length (R1)
+        movf    _r1,W,0          ; FSR2 += block length (R1)
         addwf   FSR2L,F
-        movf    R1+1,W,0
+        movf    _r1+1,W,0
         btfsc   STATUS,C
-        incf    R1+1,W,0
+        incf    _r1+1,W,0
         addwf   FSR2H,F
 
-        comf    R1,f,0           ; complement counter
-        comf    R1+1,f,0         ; in loop, we count upwards to 0
+        comf    _r1,f,0           ; complement counter
+        comf    _r1+1,f,0         ; in loop, we count upwards to 0
 
         movf    POSTDEC1         ; decrement FSR1/2 by one
         movf    POSTDEC2
@@ -141,9 +141,9 @@ C18_memmove_entry_from_memshift_backward
 C18_memmove_loop
         movff   POSTDEC1,POSTDEC2 ; backward copy
 C18_memmove_start
-        incf    R1,F,0          ; last byte reached?
+        incf    _r1,F,0          ; last byte reached?
         bnz     C18_memmove_loop
-        incf    R1+1,F,0
+        incf    _r1+1,F,0
         bnz     C18_memmove_loop    ; no, continue loop
         return 0
 ;<?C18_memcpy>
@@ -168,11 +168,11 @@ C18_memmove_start
 ;<+C18_xmemshift>
 C18_xmemshift          
           movlw   -5              ; R0 = size (temporary, used many times) 
-          movff   PLUSW0,R0       
+          movff   PLUSW0,_r0       
  
           movlw   -2              ; prodl:h = offset * size 
           movf    PLUSW0,W,0      ; 
-          mulwf   R0,0    
+          mulwf   _r0,0    
           
           movlw   -1              ; FSR1 = vec + offset*size 
           movf    PLUSW0,W,0      ; vec_L
@@ -186,15 +186,15 @@ C18_xmemshift
                                       
           movlw   -4              ; blklen
           movf    PLUSW0,W,0
-          mulwf   R0,0            ; * size
-          movff   PRODL,R1
-          movff   PRODH,R1+1      
+          mulwf   _r0,0            ; * size
+          movff   PRODL,_r1
+          movff   PRODH,_r1+1      
                            
           movlw   -3              ; multiply size(unsigned) with shift(signed)...
           movf    PLUSW0,W,0      ; shift
-          mulwf   R0,0            ; * size         
+          mulwf   _r0,0            ; * size         
           bnn     C18_xmemshift_pos ; N not modified by mulwf
-          movf    R0,W,0          ; shift if negative
+          movf    _r0,W,0          ; shift if negative
           subwf   PRODH,F,0       ; -> subtract size from PRODH
 C18_xmemshift_pos
           movf    PRODL,W,0       ; ...and add to FSR1 -> store in FSR2 

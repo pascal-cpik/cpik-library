@@ -8,7 +8,7 @@ my %addr=();
 
 foreach my $line (split /^/, $r) {
   if($line =~ /^([0-9A-F]+) +\d+ ([^ \n\r]+)/) {
-#     print("***",$addr,$lastaddr,$funcname,$1,$2);
+#      print("*** ",$addr," ",$lastaddr," ",$funcname,$1,$2,"\n");
     my $loc = hex($1);
     $funcname = $2;
     $addr{$funcname}=$loc;

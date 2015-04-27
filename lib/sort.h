@@ -7,6 +7,7 @@ typedef char (*sort_cmpfun)(void *e1, void *e2);
 void bsort(void *data, size_t length, unsigned char size, sort_cmpfun );
 void csort(void *data, size_t length, size_t size, sort_cmpfun);
 void ssort(void *data, size_t length, size_t size, sort_cmpfun);
+#define qsort csort
 
 #endif // #ifndef __SORT_H
 
