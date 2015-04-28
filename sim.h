@@ -1,15 +1,6 @@
-//////////////////////////////////////////////////////////////////////////////////
-//
-//  Home control with CAN bus
-//  (C) 2014 P. Niklaus
-//
-
-#ifndef _HOMECANCTRL_H
-#define _HOMECANCTRL_H
+#ifndef _SIM_H
+#define _SIM_H
 
 #include "myhardware.h"
-
-// #include <macros.h>
-// #include <pins.h>
 
 #endif
