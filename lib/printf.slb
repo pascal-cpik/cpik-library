@@ -1,0 +1,1156 @@
+;   Copyright (C) 2016, Pascal Niklaus pascal@niklaus.org
+;
+;   This file is part of the CPIK library
+;   -------------------------------------
+
+;   This library is free software. You can redistribute it and/or
+;   modify it under the terms of the GNU General Public License as
+;   published by the Free Software Foundation; either version 2.1, or
+;   (at your option) any later version.
+ 
+;   This library is distributed in the hope that it will be useful,
+;   but WITHOUT ANY WARRANTY; without even the implied warranty of
+;   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;   GNU General Public License for more details.
+ 
+;   You should have received a copy of the GNU General Public License 
+;   along with this library; see the file COPYING. If not, write to the
+;   Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
+;   MA 02110-1301, USA.
+ 
+;   As a special exception, if you link this library with other files,
+;   some of which are compiled with CPIK, to produce an executable,
+;   this library does not by itself cause the resulting executable to
+;   be covered by the GNU General Public License. This exception does
+;   not however invalidate any other reasons why the executable file
+;   might be covered by the GNU General Public License.
+;
+;
+;   ======================= PRINTF FOR CPIK ============================
+
+;   VERSION 0.1
+;
+;   HISTORY
+;   - Created 17-01-2016 by P. Niklaus
+;
+;   ====================================================================
+;
+;   CONTENTS
+;
+;   printf for CPIK, with ROM-stored format string
+;
+;   C HEADER DEFINITION:
+;
+;   For technical reasons (ROM storage of format string), printf is
+;   implemented as macro that invokes to functions defined in this file:
+;
+;   #define printf( fmt, ... ) \
+;       printf_get_fmt_ptr_(); \
+;       __datat__(fmt); \
+;       __datat__("\0"); \
+;       printf_(0u, __VA_ARGS__); 
+;
+;   unsigned char printf_(uint8_t dummy,...) ;
+;   void printf_get_fmt_ptr_();
+;
+;   USAGE:
+;
+;   Although implemented as macro, printf can be written as usual in the
+;   C source, e.g. printf("f=%10.3f i=%+3d s=%8s",1.234,12,"foo").
+;   The only limitation is that the format string is stored in ROM, with
+;   the code, i.e. it is fixed.
+;
+;   MEMORY FOOTPRINT
+;
+;    634 ROM and 4 (static) RAM bytes without float support
+;   1094 ROM and 8 (static) RAM bytes with float support
+;
+;   SUPPORTED DATA FORMATS
+;
+;   INTEGERS
+;
+;   %d        signed integers, decimal
+;   %u        unsigned integers, decimal
+;   %x        unsigned integers, hexadecimal
+;   %o        unsigned integers, octal
+;   %b        unsigned integers, binary
+;
+;   Format modifiers for integer data:
+;   l,ll      for long (16bits) and long long (32bits) data
+;   n         field width
+;   n.nn      as above, but decimal point injected after nn digits from right
+;             this is very useful when working with fixed decimal numbers
+;   +         always print sign
+;  ' '        space; print space for positive numbers, '-' for negative ones
+;   0         pad with leading zeroes
+;
+;   32bit FLOAT
+;
+;   %f        fixed decimal format (e.g. 123.456)
+;   %e        exponential format   (e.g. 1.234E+02)
+;   %g        not implemented yet, defaults to %e
+;
+;   Format modifiers for float data
+;
+;   n         field width
+;   .n        number of post-decimal digits
+;   +,-,SPACE as for integer data
+;   0         pad leading space with zeroes
+;
+;   CHARS, STRINGS
+;
+;   %c        print char
+;   %s        print string
+;
+;   Format modifiers for strings
+;
+;   n         field width
+;   -         left-justified
+;
+;   POINTERS
+;
+;   %p        pointers are treated like 16bit hexadecimals, except
+;             that 3 digits are printed by default and that they
+;             are preceeded by a leading '0x'
+;
+;   IMPLEMENTATION DETAILS
+;
+;   Format strings are parsed for their components, not checking for
+;   bogus information.
+;
+;   To keep the memory footpring low, the floating point part is implemented
+;   linking only float multiplication and addition routines, plus the conversion
+;   of float to a 32bit unsigned integer. This results in some limitations,
+;   which, however, are not of practical relevance if known.
+;
+;   Floating point output is produced by handling the mantissa as unsigned
+;   32bit integer that is obtained by repeated multiplication with 10 or 0.1.
+;
+;   This has two consequences: First, only about 8 significant digits
+;   can be printed; a higher number will result in an overflow in the integer
+;   arithmetic, which is detected and signalled by filling the respective
+;   field with asterisks. Second, repeated multiplication will accumulate
+;   small arithmetic errors, potentially biasing the last digits.
+;   For example, the number 12345678.9 can be printed as %.2f (resulting
+;   in 12345679.36; the last digits exceed float precision, but the number
+;   1234567936 is still representable as 32bit unsigned). In contrast, the
+;   same number will result in overflow and print as '*' with %.3f format,
+;   because 12345678900 exceeds the 32bit integer range.
+;
+;   For the exponential format (%e), the number of digits is limited to 8
+;   even if more are requested. This really is already more than the precision
+;   of the single precision floats. So specifying %.10 will nevertheless
+;   print only 7 post-decimal digits.
+;
+;   Although I never encountered this, there is the possibility of rounding
+;   errors that could lead to printing of numbers very close to a power of 10
+;   with a mantiassa not in the [1,10[ range. The printed number will still
+;   be correct (apart form the rounding error), e.g. 1000 could print
+;   as 10.0000E+02 or 0.9999E+3 in such cases. This might be fixed in future
+;   releases
+;
+;   EXAMPLES FORMATS AND OUTPUT
+;
+;   %5d      "  123"                   %-5d    "123  "
+;   %05d     "00123" "-0123"           % 05d   " 0012" "- 0012"
+;   %+5d     " +123" " -123"           %016b   "1111000010101010"
+;   %08llx   "deadbeef"                %04o    "0577"
+;   %6.2d    " 12.34" (with argument 1234)
+;   %p       "0x3ff"                   %c      "a"
+;   %+8.2f   " +123.45"                %8.3e   "1.23E+02"
+;   %-8.2f   "123.45  "                %+9.3e  "+1.23E+02"
+;   %s       "string"                  %10s    "    string"
+;   %-10s    "string    "
+;
+;   ROUTINGES DEFINED (invoked via macro)
+;
+;   C18_printf_
+;   C18_printf_get_fmt_ptr_
+
+; =======================================================================================
+
+;
+; printf_
+
+; Register use:
+;
+; TBLPTR is used and *not* preserved. This might be fixed in future
+; versions.
+
+; ------------------------------------------------------------
+;
+; STACK FRAME
+;
+; ARGN  arguments, type-specific (LO->HI ORDER)
+; ...
+; ARG2
+; ARG1
+; dummy                  <- FSR0 upon call, dummy is discarded
+
+
+
+OPT_PLUS        equ     7
+OPT_PLUS  equ 7
+OPT_SPC   equ 6
+OPT_MINUS equ 5
+OPT_DOT   equ 4
+OPT_CAPS  equ 3
+OPT_LEAD0 equ 2
+OPT_MSK_NUML  equ 0x03     
+
+;; -------------------- static RAM locations --------------------------------
+
+;; printf uses some static RAM locations... Implementing these
+;; variables in a stack frame would have been complicated given
+;; the variable number of arguments, and resulted in much larger
+;; code. RAM use is 4 bytes + 4 extra bytes for float support.
+
+;<+L18_pf_static|UDATA>
+        CBLOCK
+        L18_pf_initial_FSR0:2 ; stack pointer backup (_VA_ARG_ stuff)
+        ;L18_pf_TBLPTR:3      ; backup area for TBLPTR, not used yet
+        L18_pf_sign:1         ; 0: pos, ff:neg
+        L18_pf_totlen:1       ; total # of characters printed
+        ENDC
+;<->
+
+;<+L18_pf_static_float|UDATA>
+        CBLOCK
+        L18_pf_opts:1         ; bits: 7:+ 6:space 5:- 4:. 3:caps 2:0 0..1:# of l 
+        L18_pf_curlen:1       ; # of characters printed in current field
+        L18_pf_fw:1           ; field width specified
+        L18_pf_prec:1         ; precision (digits after '.')
+        ENDC
+;<->
+
+;; -------------------- C18_printf_ exit & error handling --------------------
+
+;<+C18_printf_>
+
+OPT_PLUS        equ     7
+
+PRINTF_FLOATS equ 1                             ; enable FLOAT code
+
+L18_pf_invalid_fmt
+        ;TODO: Maybe print error msg
+L18_pf_end
+        movlw   ~((1<<GIEH)|(1<<GIEL))          ; block interrrupts
+        andwf   INTCON,F,0
+
+        movff   L18_pf_initial_FSR0,  FSR0L     ; restore stack pointer
+        movff   L18_pf_initial_FSR0+1,FSR0H
+        movf    _it_mask,W,0
+        iorwf   INTCON,F,0
+
+        movff   L18_pf_totlen,_r0               ; return # of chars printed
+        return  0
+
+; -------------------- C18_printf_ entry  --------------------
+
+C18_printf_
+        movff   FSR0L,L18_pf_initial_FSR0       ; backup stack ptr
+        movff   FSR0H,L18_pf_initial_FSR0+1
+        clrf    POSTDEC0,0                      ; discard dummy
+        lfsr    1,L18_pf_totlen                 ; total number of characters printed
+        clrf    FSR1,0
+        
+; -------------- iterate through format string --------------------
+
+L18_pf_loop
+        tblrd*+
+        movf    TABLAT,W,0
+        bz      L18_pf_end
+        xorlw   '%'
+        bz      L18_pf_pct        
+L18_pf_pct_pct
+        xorlw   '%'                             ; restore W        
+        ICALL   L18_pf_outch
+        IBRA    L18_pf_loop
+        
+L18_pf_pct
+        tblrd*+
+        movf    TABLAT,W,0
+        xorlw   '%'
+        bz      L18_pf_pct_pct
+        
+        clrf    _r5+1,0                         ; # of chars printed in *this* field
+        clrf    _r5,0                           ; field width
+        clrf    _r4+1,0                         ; precision
+        clrf    _r4,0                           ; options
+        lfsr    1,L18_pf_sign                   ; set sign positive even if not 
+        clrf    FSR1,0                          ; used for all data types
+        
+        bra     L18_pf_fmt_enter
+
+        ; ----------------------- parse format specifier -----------------------
+
+L18_pf_fmt_loop
+        tblrd*+                                 ; get next char
+L18_pf_fmt_enter
+        movf    TABLAT,W,0
+        bz      L18_pf_end                      ; end of fmt found -- illegal format
+
+        ; --------------------- check for format modifiers ---------------------
+
+        xorlw   'l'   
+        bz      L18_pf_fmt_l
+        xorlw   'l'^'+'
+        bz      L18_pf_fmt_plus
+        xorlw   '+'^' '
+        bz      L18_pf_fmt_spc
+        xorlw   ' '^'-'
+        bz      L18_pf_fmt_minus
+        xorlw   '-'^'.'
+        bz      L18_pf_fmt_dot
+        xorlw   '.'                             ; restore W and check if ['0','9']
+        addlw   255 - '9'
+        addlw   ('9'-'0') + 1
+        bc      L18_pf_fmt_digit
+
+        ; ------------------- check for data type qualifiers ---------------------
+
+        movf    TABLAT,W,0
+        xorlw   'c'
+        bz      L18_pf_char
+        xorlw   'c'^'d'
+        bz      L18_pf_int
+        xorlw   'd'^'i'
+        bz      L18_pf_int
+        xorlw   'i'^'u'
+        bz      L18_pf_uint
+        xorlw   'u'^'x'
+        bz      L18_pf_hex
+        xorlw   'x'^'X'
+        bz      L18_pf_HEX
+        xorlw   'X'^'p'
+        bz      L18_pf_HEX
+        xorlw   'p'^'b'
+        IBZ     L18_pf_bin
+        xorlw   'b'^'o'
+        IBZ     L18_pf_oct
+        xorlw   'o'^'s'
+        IBZ     L18_pf_string
+IF PRINTF_FLOATS > 0        
+        xorlw   's'^'f'
+        IBZ     L18_pf_float_f
+        xorlw   'f'^'e'
+        IBZ     L18_pf_float_e
+        xorlw   'e'^'g'
+        IBZ     L18_pf_float_g
+ENDIF        
+        bra     L18_pf_invalid_fmt          ; illegal format -> error
+
+        ; -------------------- handle format modifiers -------------------------
+
+L18_pf_fmt_l
+        incf    _r4,1,0                         ; count # of 'l's, no need to protect upper bits
+        bra     L18_pf_fmt_loop
+L18_pf_fmt_plus
+        bsf     _r4,OPT_PLUS,0                  ; '+' found (e.g. %+03d)
+        bra     L18_pf_fmt_loop
+L18_pf_fmt_spc
+        bsf     _r4,6,0
+        bra     L18_pf_fmt_loop
+L18_pf_fmt_minus
+        bsf     _r4,5,0                         ; '-' found (e.g. %-10s)
+        bra     L18_pf_fmt_loop
+L18_pf_fmt_dot
+        bsf     _r4,4,0                         ; '.' found (e.g %6.2f)
+        bra     L18_pf_fmt_loop
+L18_pf_fmt_digit
+        movwf    _r0,0                          ; save number
+        lfsr     1,_r5                          ; default = field width
+        btfsc   _r4,4,0                         ; was '.' already encountered?
+        decf    FSR1L,1,0                       ; point to precision (_r4+1)
+        movf    INDF1,W,0                       ; get old number
+        mullw   10                              ; multiply by 10
+        movf    PRODL,W,0
+        addwf   _r0,0,0                         ; add new digit
+        bnz     L18_pf_fmt_digit_cont
+        btfss   _r4,4,0                         ; don't detect leading 0 in precision field
+        bsf     _r4,2,0                         ; leading zero in field widt -> flag
+L18_pf_fmt_digit_cont
+        movwf   INDF1,0
+        IBRA    L18_pf_fmt_loop
+
+; ----------------------- print char --------------------------
+
+L18_pf_char                                     ; print single character
+        movf    POSTDEC0,W,0
+        ICALL   L18_pf_outch
+        IBRA    L18_pf_loop
+
+; ------------------ print RAM string -------------------
+
+; if used only once below -> integrate directly in routine
+
+L18_pf_spool_RAM_string
+        movf    POSTINC1,W,0                    ; check for stop mark
+        bz      L18_pf_spool_RAM_string_end
+        movff   FSR1L,PREINC0
+        movff   FSR1H,PREINC0
+        ICALL   L18_pf_outch
+        movff   POSTDEC0,FSR1H
+        movff   POSTDEC0,FSR1L
+        IBRA    L18_pf_spool_RAM_string
+L18_pf_spool_RAM_string_end
+        return  0
+
+; ------------------ string ----------------------------
+
+L18_pf_string
+        ICALL   popPTR                          ; ptr to string -> FSR1
+        movlw   -1
+        btfsc   _r4,5,0                         ; '-' flag
+        bra     L18_pf_string_minus
+        rcall   L18_pf_string_len               ; W contains len
+        addwf   _r5+1,1,0                       ; pretend string already printed
+        ICALL   L18_pf_pad_space
+L18_pf_string_minus
+        rcall   L18_pf_spool_RAM_string         ; print RAM string at FSR1
+        ICALL   L18_pf_pad_space
+        IBRA    L18_pf_loop
+
+; ----------------- determine string len --------------
+
+; FSR1 points to NUL-terminated string
+; W contains length; works for up to 126 chars
+
+L18_pf_string_len
+        movlw   -1
+L18_pf_string_len_loop
+        addlw   1
+        tstfsz  PLUSW1,0
+        bra     L18_pf_string_len_loop
+        return 0                                ; W now contains string length
+
+; ------------------ signed integer ----------------------------
+
+L18_pf_int
+        btfsc   _r4,1,0                         ; fetch signed formats from 
+        bra     L18_pf_s32bits                  ; stack and expand to 32 bit
+        btfsc   _r4,0,0
+        bra     L18_pf_s16bits
+        
+L18_pf_s8bits
+        ICALL   cast8_32
+        bra     L18_pf_int_cont
+
+L18_pf_s16bits
+        ICALL   cast16_32
+        bra     L18_pf_int_cont
+
+L18_pf_s32bits
+L18_pf_int_cont
+        btfss   INDF0,7,0                       ; negative?
+        bra     L18_pf_int_is_positive
+L18_pf_int_is_negative
+        ICALL   neg32                           ; reverse sign
+        lfsr    1,L18_pf_sign
+        setf    INDF1,0                         ; flag as negative
+L18_pf_int_is_positive
+        movlw   10
+        movwf   _r0,0                           ; base 10
+        IBRA    L18_pf_u32bits
+
+; -------------------- unsigned integer --------------------
+; (and variants with base other than 10)
+
+L18_pf_bin
+        movlw   2                               ; binary = base 2
+        IBRA    L18_pf_uint_cont
+L18_pf_oct
+        movlw   8                               ; octal = base 8
+        IBRA    L18_pf_uint_cont
+L18_pf_HEX
+        bsf     _r4,3,0                         ; flag that printing in capitals
+L18_pf_hex
+        movlw   16                              ; hex = base 16
+        IBRA    L18_pf_uint_cont
+L18_pf_uint
+        movlw    10                             ; decimal = base 10
+L18_pf_uint_cont
+        movwf   _r0,0                           ; store base in _r0
+        btfsc   _r4,1,0                         ; pop from stack, expand to 32 bits
+        bra     L18_pf_u32bits
+        btfsc   _r4,0,0
+        bra     L18_pf_u16bits
+L18_pf_u8bits
+        clrf    PREINC0,0
+L18_pf_u16bits
+        clrf    PREINC0,0
+        clrf    PREINC0,0
+L18_pf_u32bits
+        movff   FSR0L,FSR1L                     ; point FSR1 to 32bit data
+        movff   FSR0L,FSR1L 
+        movf    POSTDEC1,W,0
+        movf    POSTDEC1,W,0
+        movf    POSTDEC1,W,0
+
+        clrf    PREINC0,0                       ; stop mark, chars follow
+;L18_pf_u32bits_enter_from_ptr
+   
+        rcall   L18_pf_print_uint32_fsr1
+        bra     L18_pf_loop
+
+;; ------------------------- print 32 bit uint ----------------------------
+
+;; print 32bit unsigned int pointed to by FSR1
+;; field width (_r5), options (_r4), and precision (_r4+1) must be set
+;; base (e.g. 10 for decimal) must be in _r0
+;; there must be a stop mark (0) already on the stack
+;; upon exit, all data incl. stop mark will be removed
+
+L18_pf_print_uint32_fsr1       
+
+        ICALL   L18_pf_div_by_base_and_push
+
+        ; ---- determine specific format type
+
+        btfsc  _r4,2,0                          ; test if '0' in format
+        bra    L18_pf_sign_zero_digits
+        btfsc  _r4,5,0                          ; test if '-' in format
+        bra    L18_pf_sign_digits_pad
+        movf   _r5,W,0                          ; field width
+        bnz    L18_pf_pad_sign_digits
+
+L18_pf_sign_digits_pad
+        ICALL   L18_pf_outsign
+        ICALL   L18_pf_spool
+        ICALL   L18_pf_pad_space
+        IBRA    L18_pf_int_end
+
+L18_pf_sign_zero_digits
+        ICALL   L18_pf_outsign
+        ICALL   L18_pf_calc_pad_size_no_sign
+        ICALL   L18_pf_pad_zeroes
+        ICALL   L18_pf_spool
+        IBRA    L18_pf_int_end
+
+L18_pf_pad_sign_digits
+        ICALL   L18_pf_calc_pad_size
+        ICALL   L18_pf_pad_space
+        ICALL   L18_pf_outsign
+        ICALL   L18_pf_spool
+
+L18_pf_int_end
+        movf    POSTDEC0,W,0                    ; pop 32bit from stack
+        movf    POSTDEC0,W,0
+        movf    POSTDEC0,W,0
+        movf    POSTDEC0,W,0
+        return  0
+
+; --------------------- print pointer --------------------------
+
+L18_pf_ptr
+        movlw   '0'
+        ICALL   L18_pf_outch
+        movlw   'x'
+        ICALL   L18_pf_outch
+        movlw  1+4                              ; 16bit format
+        movwf  _r4
+        movf   _r5,W,0                          ; is width specified?
+        bnz    L18_pf_ptr_go
+        movlw  5                                ; no, use default width
+        movwf  _r5,0
+L18_pf_ptr_go
+        IBRA  L18_pf_hex                        ; go to regular hex printing
+
+; ============================================================
+
+; ---------------------- float printing ----------------------
+
+; algorithm for %f:
+;    multiply by 10^precision
+;    add 0.5 for rounding
+;    convert to uint32
+;    check for overflow
+;    print with decimal inserted
+
+IF PRINTF_FLOATS > 0
+
+L18_pf_float_f                                  ; FSR0 points to last byte
+        rcall   L18_pf_float_handle_sign_r45    ; 
+        movff   _r4+1,PREINC0                   ; push precision == loop counter
+
+L18_pf_float_f_loop                             ; multiply by 10^precision
+        decf    INDF0,F,0
+        bn      L18_pf_float_f_loop_end
+
+        rcall   L18_pf_f2ten
+        ICALL   zfpmul32
+        bra     L18_pf_float_f_loop
+L18_pf_float_f_loop_end
+        movf    POSTDEC0,W,0                    ; pop counter
+        rcall   L18_pf_f2half
+        ICALL   zfpadd32
+
+        movlw   0x4f                            ; if value > 4f7fffff (== 4294967040) -> overflow
+        subwf   _f1+3,W,0                       ; byte 3 > 0x4f --> err
+        bn      L18_pf_float_f_range_ok         ; byte 3 < 0x4f --> ok
+        bz      L18_pf_float_f_range_chk2       ; byte 2, bit 7 set -> err
+L18_pf_float_f_overflow
+        ICALL   L18_pf_restore_r                ; restore r4..r5+1
+L18_pf_float_f_overflow_loop
+        movlw   '*'
+        ICALL   L18_pf_outch
+        decf    _r5,F,0
+        bnz     L18_pf_float_f_overflow_loop
+        IBRA    L18_pf_loop
+L18_pf_float_f_range_chk2
+        btfsc   _f1,7,0
+        bra     L18_pf_float_f_overflow                
+L18_pf_float_f_range_ok
+        ICALL   F32toUI32                       ; f1 is now ui32
+
+        movff   _f1+0,PREINC0
+        movff   _f1+1,PREINC0
+        movff   _f1+2,PREINC0
+        movff   _f1+3,PREINC0
+
+        ICALL   L18_pf_restore_r                ; restore r4..r5+1         
+        IBRA    L18_pf_int_is_positive          ; 32bit uint must be on stack
+
+;; ------------- preload f1 and f2 with important float constants -------------------
+;; these are so simple that this is implemented with individual mov/clr operations
+;; rather than with a table
+
+L18_pf_f2tenth
+        movlw   0x3d
+        movwf   _f2+3,0
+        movlw   0xcc
+        movwf   _f2+2,0
+        movwf   _f2+1,0
+        movlw   0xcd
+        movwf   _f2+0,0
+        return  0
+L18_pf_f2one
+        movlw   0x3f
+        movwf   _f2+3,0
+        movlw   0x80
+        movwf   _f2+2,0
+        bra     L18_pf_f2clr2
+L18_pf_f2ten
+        movlw   0x20
+        movwf   _f2+2,0
+        movlw   0x41
+        movwf   _f2+3,0
+        bra     L18_pf_f2clr2
+L18_pf_f2half
+        movlw   0x3f
+        movwf   _f2+3,0
+L18_pf_f2clr3
+        clrf    _f2+2,0
+L18_pf_f2clr2
+        clrf    _f2+1,0
+L18_pf_f2clr1
+        clrf    _f2+0,0
+        return  0
+        
+L18_pf_f1one
+        movlw   0x3f
+        movwf   _f1+3,0
+        movlw   0x80
+        movwf   _f1+2,0
+        bra     L18_pf_f1clr2
+L18_pf_f1ten
+        movlw   0x20
+        movwf   _f1+2,0
+        movlw   0x41
+        movwf   _f1+3,0
+L18_pf_f1clr2
+        clrf    _f1+1,0
+        clrf    _f1+0,0
+        return  0
+               
+;; code common to printf_float_f and printf_float_e
+;; - get float from stack
+;; - check sign and modify _r3
+;; - force 32bit in _r3+1
+;; - move float to _f1 while saving _r3.._r5+1 on stack
+
+L18_pf_float_handle_sign_r45
+        movff   POSTDEC0,_f1+3                  ; copy float to _f1 (_r2, _r3)
+        movff   POSTDEC0,_f1+2                  ;--> FP routine in RTL?
+        movff   POSTDEC0,_f1+1
+        movff   POSTDEC0,_f1+0
+        bsf     _r4,0,0                         ; flag 32 bits
+        bsf     _r4,1,0
+        btfss   _f1+3,7,0                       ; test sign
+        bra     L18_pf_float_f_pos
+        bcf     _f1+3,7,0                       ; make positive
+        lfsr    1,L18_pf_sign
+        setf    INDF1,0                         ; flag negative for printing
+L18_pf_float_f_pos
+        IBRA    L18_pf_save_r                   ; copy r4..r5+1 (these are used by float ops)
+
+;; ---------------------------- compare f1 with constants -------------------------
+;; These constants are so simple that the compare operations are hard-coded.
+;; This allows a minimum printf footprint is these routines are not needed otherwise.
+
+;; check if f1 >= 1
+;;       TRUE:  W=0xff, Z=0
+;;       FALSE: W=0x00, Z=1
+
+L18_pf_f1ge1
+        rlcf    _f1+2,W,0
+        rlcf    _f1+3,W,0                       ; exponent now in W
+        addlw   256-0x7f
+        bc      L18_pf_f1chk_true
+L18_pf_f1chk_false
+        andlw   0
+        return  0
+L18_pf_f1chk_true
+        iorlw   0xff
+        return  0
+
+;; check if f1 < 10
+;;      exp<0x41 -> TRUE
+;;      exp>0x41 -> FALSE
+;;      exp==0x41: only need to check highest mantissa byte because others 0x00
+
+L18_pf_f1ltten
+        rlcf    _f1+2,W,0
+        rlcf    _f1+3,W,0                       ; exponent now in W
+        addlw   -0x82
+        bz      L18_pf_f1ltten_check_mant
+        bn      L18_pf_f1chk_true
+        bra     L18_pf_f1chk_false
+L18_pf_f1ltten_check_mant
+        movf    _f1+2,W,0                       ; get highest mantissa byte
+        addlw   ~0x20                           ;   (exp bit7 is equal anyway)
+        bnc     L18_pf_f1chk_true               ; is smaller
+        bra     L18_pf_f1chk_false
+
+;; algorithm for e:
+;;    bring into 1-9.99 range by repeated multiplication and track exponent
+;;    multiply by 10^precision
+;;    add 0.5 for rounding
+;;    convert to uint32
+;;    check for overflow
+;;    print with decimal inserted
+
+;; potential improvements: for very large exponents, better multiply in larger
+;; steps than single powers of 10 (e.g *= 10000 instead of *=10)
+;; not sure if this is relevant at all
+
+L18_pf_float_e
+        tstfsz _r4+1,0                          ; precision = 0 ?
+        bra    L18_pf_float_e_prec_set          ; no, keep what is set
+        movlw  -6
+        addwf  _r5,W,0
+        movwf  _r4+1,0                          ; field width - 6
+        btfsc   INDF0,7,0
+        bra     L18_pf_float_e_prec_sign        ; negative
+        movlw   0x80+0x40                       ; '+' or ' '
+        andwf   _r4,W,0                         ; mask option bits
+        bz      L18_pf_float_e_prec_set
+L18_pf_float_e_prec_sign
+        decf    _r4+1,F,0                       ; one more character for sign
+L18_pf_float_e_prec_set
+        btfsc   _r4+1,7,0
+        clrf    _r4+1                           ; set to 0 if negative
+        movlw   7
+        cpfsgt  _r4+1,0                         
+        bra     L18_pf_float_e_prec_ok          ; prec <= 7 -> ok
+        movlw   7                               ; otherwise, limit to 7
+        movwf   _r4+1,0
+        
+L18_pf_float_e_prec_ok        
+        rcall   L18_pf_float_handle_sign_r45
+        clrf    PREINC0,0                       ; exp10 = 0
+        rcall   L18_pf_f1ltten                  ; f1 < 10?
+        bnz     L18_pf_float_e_grow
+        
+L18_pf_float_e_shrink        
+        rcall   L18_pf_f2tenth                  ; multiply by 0.1
+        incf    INDF0,F,0
+        ICALL   zfpmul32
+        rcall   L18_pf_f1ltten
+        bz      L18_pf_float_e_shrink        
+        bra     L18_pf_float_e_ok
+        
+L18_pf_float_e_grow
+        rcall   L18_pf_f1ge1
+        bnz     L18_pf_float_e_ok
+        rcall   L18_pf_f2ten                    ; multiply by 10
+        decf    INDF0,F,0
+        ICALL   zfpmul32
+        bra     L18_pf_float_e_grow
+
+L18_pf_float_e_ok                               ; exp10 correct, 1 <= val < 10
+        movff   L18_pf_prec,PREINC0             ; push precision to TOS
+L18_pf_float_e_prec_loop
+        decf    INDF0,F,0       
+        bn      L18_pf_float_e_prec_done        
+        rcall    L18_pf_f2ten                   ; multiply by 10
+        ICALL   zfpmul32
+        bra     L18_pf_float_e_prec_loop
+L18_pf_float_e_prec_done                
+        movf    POSTDEC0,W,0                    ; pop precision counter 
+                        
+        rcall   L18_pf_f2half
+        ICALL   zfpadd32
+        ICALL   F32toUI32                       ; f1 is now uint32
+
+        movf    POSTDEC0,W,0                    ; pop exponent
+        
+        movff    _f1+0,PREINC0                  ; move uint32 back to TOS
+        movff   FSR0L,FSR1L                     ; FSR1 points to uint32
+        movff   FSR0H,FSR1H                     
+        movff    _f1+1,PREINC0
+        movff    _f1+2,PREINC0
+        movff    _f1+3,PREINC0
+
+        clrf    PREINC0,0                       ; stop mark for spool
+        ICALL   L18_pf_push_exp                 ; push exp as ASCII
+        movlw   'E'
+        movwf   PREINC0,0                       ; 'E+xx' now on stack
+        
+        ICALL   L18_pf_restore_r                ; restore r4..r5+1
+
+        movlw   10
+        movwf   _r0                             ; set base
+        ICALL   L18_pf_print_uint32_fsr1        ; print number
+
+        movf    POSTDEC1,W,0
+        movf    POSTDEC1,W,0
+        movf    POSTDEC1,W,0
+        movf    POSTDEC1,W,0
+        
+        IBRA    L18_pf_loop
+
+L18_pf_float_g
+        bra     L18_pf_float_e                  ; until real %g implemented
+        ; idea:
+        ; fake print in f format and count sig digits
+        ; fake print in e format and count sig digits
+        ; print with the one that is better... 
+
+ENDIF
+
+; ------------------------------------------------------------
+;
+; determines number of "fill" chars to arrive at field width
+; L18_pf_calc_pad_size_no_sign     ignoring the sign char
+; L18_pf_calc_pad_size             considers the sign char (+,-,' ')
+;                                  depending on the options
+
+L18_pf_calc_pad_size_no_sign
+        clrf    _r0,0
+        bra     L18_pf_calc_pad_size_cont
+L18_pf_calc_pad_size
+        rcall   L18_pf_sign_W
+        clrf    _r0,0
+        tstfsz  WREG,0
+        incf    _r0,1,0
+L18_pf_calc_pad_size_cont
+        rcall   L18_pf_spool_size
+        addwf   _r0,0,0                         ; w is now
+        subwf   _r5,1,0                         ; _r5-w->_r5
+        btfsc   _r5,7,0
+        clrf    _r5,0                           ; _r5<0 -> 0
+        return  0
+
+; --------- write fill chars until >= field_width characters printed ----
+;
+; these can be '0' or ' '
+
+L18_pf_pad_zeroes
+        movlw   '0'
+        bra     L18_pf_pad_start
+L18_pf_pad_space
+        movlw   ' '
+L18_pf_pad_start
+        movwf   PREINC0,0
+L18_pf_pad_loop
+        movf    _r5,W,0 ; field width
+        cpfslt  _r5+1,0 ; # chars printed in current field
+        bra     L18_pf_pad_end
+        movf    INDF0,W,0
+        ICALL   L18_pf_outch
+        bra     L18_pf_pad_loop
+L18_pf_pad_end
+        movf    POSTDEC0,W,0
+        return  0
+
+; ---------------- spool out stacked characters --------------------
+
+L18_pf_spool
+        movf    POSTDEC0,W,0         ; check for stop mark
+        bz      L18_pf_spool_end ; saves one return instruction
+        ICALL   L18_pf_outch
+        IBRA    L18_pf_spool
+L18_pf_spool_end
+        return  0
+
+; ----------------- determine spool length -------------------------
+;
+; W = number of characters
+
+L18_pf_spool_size
+        movlw   0
+L18_spool_size_loop
+        tstfsz  PLUSW0,0
+        bra     L18_spool_size_cont
+        negf    WREG,0
+        return  0
+L18_spool_size_cont
+        addlw   -1
+        bra     L18_spool_size_loop
+
+IF 0
+
+; ----- determine # of significant digits in spool buffer -----------
+;
+; W = number of significant digits
+; FSR1 destroyed
+
+L18_pf_spool_sig_digits
+        movff   FSR0L,FSR1L
+        movff   FSR0H,FSR1H
+        clrf    PREINC0,0       ; digit counter, bit 7 = flag
+L18_pf_spool_sig_digits_loop
+        movf    POSTDEC1,W,0
+        bz      L18_pf_spool_sig_digits_end
+        addlw   255 - '9'
+        addlw   ('9'-'1') + 1   ; check for '1'-'9'
+        bc      L18_pf_spool_sig_digits_found
+        btfss   INDF0,7,0
+        bra     L18_pf_spool_sig_digits_loop
+        addlw   1
+        bnc     L18_pf_spool_sig_digits_loop
+L18_pf_spool_sig_digits_found
+        incf    INDF0,1,0
+        bsf     INDF0,7,0
+        bra     L18_pf_spool_sig_digits_loop
+L18_pf_spool_sig_digits_end
+        bcf     INDF0,7,0       ; remove flag
+        movf    POSTDEC0,W,0
+        return  0
+
+ENDIF
+
+; ----------------- determine how to print sign --------------------
+;
+; negative values: '-' always printed
+; positive values: '+' or ' ' printed if corresponding flags set
+;
+L18_pf_sign_W
+        lfsr    1,L18_pf_sign
+        tstfsz  INDF1,0                         ; negative ?
+        retlw  '-'                              ; yes
+L18_pf_sign_W_pos
+        btfsc   _r4,7,0                         ; '+' in format string?
+        retlw   '+'
+        btfsc   _r4,6,0                         ; ' ' in format string?
+        retlw   ' '
+        retlw   0                               ; silent pos. sign
+
+L18_pf_outsign
+        rcall   L18_pf_sign_W                   ; determine sign char
+        tstfsz  WREG,0
+        bra     L18_pf_outch                    ; print if not zero
+        return  0
+
+; ----------------------------- print character ----------------------
+;
+; increments length counters of current field and total, preserves FSR1, _r4..._r5+1
+; TBLPTR *must* be preserved by routine
+; TODO: use print vector
+
+L18_pf_outch
+        movff   FSR1L,PREINC0
+        movff   FSR1H,PREINC0
+        lfsr    1,L18_pf_totlen
+        incf    INDF1,1,0                       ; totlen++
+        incf    _r5+1,1,0                       ; curlen++
+        movff   _r4,PREINC0
+        movff   _r4+1,PREINC0
+        movff   _r5,PREINC0
+        movff   _r5+1,PREINC0
+        movwf    PREINC0,0
+        call    C18_addchar
+        movf    POSTDEC0,W,0
+        movff   POSTDEC0,_r5+1
+        movff   POSTDEC0,_r5
+        movff   POSTDEC0,_r4+1
+        movff   POSTDEC0,_r4
+        movff   POSTDEC0,FSR1H
+        movff   POSTDEC0,FSR1L
+        return  0
+
+; ------- save/restore _r4 .._r5+1 to/from backup area ---------
+
+; used by floating point routines only, since these overwrite _r4.._r5+1
+; uses FSR1 and FSR2, but this could be avoided...
+
+IF PRINTF_FLOATS>0
+
+L18_pf_restore_r
+        movff  L18_pf_opts,_r4
+        movff  L18_pf_prec,_r4+1
+        movff  L18_pf_fw,_r5
+        movff  L18_pf_curlen,_r5+1
+        return  0
+        
+L18_pf_save_r
+        movff  _r4,L18_pf_opts
+        movff  _r4+1,L18_pf_prec
+        movff  _r5,L18_pf_fw
+        movff  _r5+1,L18_pf_curlen
+        return  0
+
+ENDIF
+
+;; ------- push exponent in W as ASCII to stack, incl. sign ---------
+;; exponent is in W
+
+IF PRINTF_FLOATS > 0
+
+L18_pf_push_exp
+        movwf   _r0,0                           ; save data
+        movlw   '0'
+        movwf   PREINC0,0                       ; 1s
+        movwf   PREINC0,0                       ; 10s        
+        movlw   -1
+        btfsc   _r0,7,0                         ; test sign
+        bra     L18_pf_push_exp_neg
+        movlw   '+'
+        bra     L18_pf_push_exp_sign
+L18_pf_push_exp_neg
+        negf    _r0,0                           ; negate value
+        movlw   '-'
+L18_pf_push_exp_sign        
+        movwf   PREINC0,0                       ; sign (ASCII)
+L18_pf_push_exp_loop
+        movlw   9
+        cpfsgt  _r0,0                           ; skip if _r0>9
+        bra     L18_pf_push_exp_ok
+        movlw   -1
+        incf    PLUSW0,F,0                      ; increase 10s
+        movlw   -10
+        addwf   _r0,F,0                         ; _r0 -= 10
+        bra     L18_pf_push_exp_loop
+L18_pf_push_exp_ok                              ; copy back 1s
+        movlw   '0'
+        addwf   _r0,F,0
+        movlw   -2
+        movff   _r0,PLUSW0
+        return  0
+
+ENDIF
+
+
+; ----- repetitively divide by base , push remainder ASCII-coded to stack.
+; also, insert a '.' after # of digits specified by precision
+; _r0:   base
+; _r4:   flags, used to check whether hex a-f need to be capitalized
+; _r4+1: precision counter, is decremented and undefined upon exit
+; FSR1:  points to first byte of 32 bit data
+
+L18_pf_div_by_base_and_push
+        clrf    _r0+1                           ; clear divisor high bytes
+        clrf    _r0+2
+        clrf    _r0+3
+        movlw   -1                              ; adjust precision
+        tstfsz   _r4+1,0                        ; =0 -> -1
+        movlw    1                              ; >0 -> ++
+        addwf    _r4+1,1,0
+L18_pf_32bit_divloop
+        ICALL   ipdiv32u                        ; *(FSR1) /= _r0_r1, mod -> _r2_r3
+        movlw   '0'
+        addwf   _r2,1,0                         ; add '0'-> r2; now ASCII except for hex
+        movlw   255-'9'
+        addwf   _r2,0,0                         ; >'9'?
+        bnc      L18_pf_32bit_divloop_isdec
+L18_pf_32bit_divloop_ishex
+        movlw   'a'-'9'-1
+        btfsc   _r4,3,0                         ; hex chars in caps?
+        movlw   'A'-'9'-1
+        addwf   _r2,1,0
+L18_pf_32bit_divloop_isdec
+        movff   _r2,PREINC0                     ; push char to spool buffer
+L18_pf_32bit_divloop_pastdec        
+        decf    _r4+1,1,0                       ; decrement precision counter
+        bn      L18_pf_32bit_divloop_check_end
+        decf    _r4+1,0,0                       ; counter == 1 ? 
+        movlw   '.'                             ; '.'
+        bnz     L18_pf_32bit_divloop
+        movwf   PREINC0,0                       ; yes, push '.' 
+        bra     L18_pf_32bit_divloop_pastdec    ; saves a command ;-)
+L18_pf_32bit_divloop_check_end
+        movf    POSTINC1,W,0
+        movf    POSTINC1,W,0
+        movf    POSTINC1,W,0
+        movf    POSTDEC1,W,0                    ; check if results > 0
+        iorwf   POSTDEC1,0,0
+        iorwf   POSTDEC1,0,0
+        iorwf   INDF1,0,0
+        bnz     L18_pf_32bit_divloop            ; yes -> continue
+        return  0
+
+X18_printf_
+;<?cast8_32>
+;<?cast16_32>
+;<?neg32>
+;<?ipdiv32u>
+;<?popPTR>
+;<?zfpmul32>
+;<?zfpadd32>
+;<?F32toUI32>
+;<?L18_pf_static_float>
+;<->
+
+; ------------------------------------------------------------
+
+; skip over NUL-terminated string that follows call, storing
+; address in TBLPTR for later use
+; skipping works by manipulating the return address
+;
+;<+C18_printf_get_fmt_ptr_>
+C18_printf_get_fmt_ptr_
+    IFDEF EEPGD
+        bsf   EECON1,EEPGD,0
+    ENDIF
+    IFDEF CFGS
+        bcf   EECON1,CFGS,0
+    ENDIF
+        movf    TOSU,W,0
+        movwf   TBLPTRU,0
+        movwf   PREINC0,0
+        movf    TOSH,W,0
+        movwf   TBLPTRH,0
+        movwf   PREINC0,0
+        movf    TOSL,W,0
+        movwf   TBLPTRL,0
+        movwf   PREINC0,0
+
+L18_getROMaddr_loop             ;skip over data
+        TBLRD *+
+        tstfsz  TABLAT,0
+        bra     L18_getROMaddr_loop
+
+        btfsc   TBLPTRL,0,0     ;make sure TBLPTR is word-aligned
+        TBLRD *+
+
+        movf    TBLPTRU,W,0     ;manipulate return address
+        movwf   TOSU,0
+        movf    TBLPTRH,W,0
+        movwf   TOSH,0
+        movf    TBLPTRL,W,0
+        movwf   TOSL,0
+
+        movf   POSTDEC0,W,0     ;restore TBLPTR for use by main printf_
+        movwf  TBLPTRL,0
+        movf   POSTDEC0,W,0
+        movwf  TBLPTRH,0
+        movf   POSTDEC0,W,0
+        movwf  TBLPTRU,0
+
+        return  0
+X18_pf_get_fmt_ptr_
+;<?L18_pf_static>
+;<->
+
+

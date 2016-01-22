@@ -9,8 +9,8 @@ SHELL := /bin/bash
 # target PIC processor (syntax: 16f84):
 PROC = 18f4520
 
-FILES := sim test_strcmp test_memcpymove test_sort test_bcd
-LOCALSLBS = memcpymove.slb strcmp.slb sort.slb bcd.slb
+FILES := sim_printf  
+LOCALSLBS = strcmp.slb printf.slb
 
 LIBS = $(LOCALSLBS:%=lib/%)
 
@@ -34,14 +34,13 @@ OBJS = $(SOURCES:.c=.slb)
 ASM     = $(PROG:.hex=.asm)
 LST     = $(PROG:.hex=.lst)
 
-CC = /usr/bin/cpik-0.7.4
-AS = /usr/bin/cpik-0.7.4
-LD = /usr/bin/cpik-0.7.4
+CC = cpik
+AS = cpik
+LD = cpik
 
-CFLAGS = -p$(PROC) -I /usr/share/cpik/0.7.3/include/device
+CFLAGS = -p$(PROC) -I /usr/share/cpik/0.7.4/include/device
 ASFLAGS = -a 
 LDFLAGS = -p p$(PROC)
-
 
 # top-level rule to compile everything.
 all: $(PROG)
@@ -54,14 +53,9 @@ $(PROG) $(LST) $(COD): $(ASM)
 $(ASM): $(OBJS) $(LIBS)
 	$(LD) $(LDFLAGS) -o $(ASM) $(OBJS) $(LIBS) 
 
-# special rule for PICloops-generated delay.c	
-delay.c: myhardware.h delay.h delay.c.template PICloops.pl Makefile.gen_delay_c
-	./Makefile.gen_delay_c >delay.c
-	
 # meta-rule for compiling any C source file.into .slb
 %.slb: %.c $(HEADERS)
 	$(CC) $(CFLAGS) $<
-	@rm $<.c
 
 show:
 	@echo "HEADERS:" $(HEADERS)
@@ -69,23 +63,18 @@ show:
 	@echo "LIBS:   " $(LIBS)
 	@echo "EXTRA_GIT_FILES:" $(EXTRA_GIT_FILES)
 
-
 clean:
 	$(RM) *.asm *.c.c *.lst *.hex *.cod *.slb
-
-burn: $(PROG)
-	piklab-prog -t usb --target-self-powered false -c program -p icd2 -d $(PROC) $(PROG)
-	piklab-prog -c run -p icd2 -t usb --target-self-powered false -d $(PROC)
 
 gitadd:	
 	git add $(HEADERS) $(SOURCES) $(EXTRA_GIT_FILES)
 
 gitcommit:
 	git commit -a 
-	
+
 doxygen:
 	doxygen
-	
+
 memuse: $(LST)
 	@echo '---------------- ROM ----------------'
 	@grep 'Program Memory Bytes'  $(LISTING)
@@ -99,12 +88,12 @@ memuse: $(LST)
 funclen:
 	@./funclen.pl $(LST)
 
-	
+
 doc:
-	okular docs/PIC18F2680.pdf
-	
+	@{ okular docs/PIC18F2680.pdf & }
+
 cpik:
-	okular /usr/share/cpik/0.7.3/doc/cpik-0.7.3-1-doc.pdf
+	@{ okular /usr/share/cpik/0.7.4/doc/cpik-0.7.4-4-doc.pdf & }
 
 mnemonics:	
-	okular /data/_programming/PIC/assembler/instructions.pdf 
+	@{ okular /data/_programming/PIC/assembler/instructions.pdf & }

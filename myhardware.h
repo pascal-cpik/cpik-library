@@ -83,47 +83,6 @@ typedef union {
 #define CRYSTAL 1
 
 
-//----------------------- LCD -------------------------
-
-/// @name LCD
-/// @brief LCD-related defines for Hitachi-like controllers
-/// These defines are used in lcd.c
-/// @{
-
-/// @brief Set TRIS bit for RW line
-#define LCD_RW_SET_TRIS TRISCbits.TRISC1=0
-
-/// @brief Set RW line low (write operation) and at the same
-/// time set the TRIS bits for the data lines to output
-#define LCD_WRITE { PORTCbits.RC1=0; TRISA &= 0b11000011; }  
-
-/// @brief Set RW line high (read operation) and at the same
-/// time set the TRIS bits for the data lines to input
-#define LCD_READ  { TRISA |= 0b00111100; PORTCbits.RC1=1;  }  
-
-// RS is on RC1
-
-/// @brief Set TRIS bit for RS (register select) line
-#define LCD_RS_SET_TRIS TRISCbits.TRISC3=0
-
-/// @brief Set RS low 
-#define LCD_RS0   PORTCbits.RC3=0
-
-/// @brief Set RS high 
-#define LCD_RS1   PORTCbits.RC3=1
-
-/// @brief Set TRIS bit for E 
-#define LCD_E_SET_TRIS TRISCbits.TRISC0=0
-/// @brief Set E low 
-#define LCD_E0    PORTCbits.RC0=0
-/// @brief Set E high
-#define LCD_E1    PORTCbits.RC0=1
-
-/// @brief set data byte @p x (for writing)
-#define LCD_SETDATA(x) { PORTA = (PORTA&0b11000011) | ((x&0x0f)*4u); }
-
-/// @brief read data byte 
-#define LCD_GETDATA    ((PORTA & 0b00111100)>>2u)
 
 /// @}
 
