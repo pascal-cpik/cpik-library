@@ -48,7 +48,7 @@
 ; 24 bytes (+40 bytes shared with C18_memmove)
 ;<+C18_memcpy>
 C18_memcpy
-        call    C18_memmovecopy_args
+        ICALL   C18_memmovecopy_args
 C18_memcpy_forward
         comf    _r1,f,0           ; complement counter
         comf    _r1+1,f,0         ; in loop, we count upwards to 0
@@ -104,37 +104,37 @@ C18_memmovecopy_args
 ; 70 bytes (+24 from C18_memcpy and +40 from C18_memmovecopy_args)
 ;<+C18_memmove>
 C18_memmove
-        call    C18_memmovecopy_args
+        ICALL   C18_memmovecopy_args
 
-        movf    FSR1L,W         ; determine copy direction
-        subwf   FSR2L,W
-        movf    FSR1H,W
-        btfss   STATUS,C
+        movf    FSR1L,W,0         ; determine copy direction
+        subwf   FSR2L,W,0
+        movf    FSR1H,W,0
+        btfss   STATUS,C,0
         addlw   1
-        subwf   FSR2H,W
+        subwf   FSR2H,W,0
 
-        IBNC_FAR C18_memcpy_forward  ; copy forwards as in strcpy
+        IBNC    C18_memcpy_forward  ; copy forwards as in strcpy
         
 C18_memmove_entry_from_memshift_backward         
         movf    _r1,W,0          ; copy backwards                                
-        addwf   FSR1L,F         ; FSR1 += block length (R1)
+        addwf   FSR1L,F,0         ; FSR1 += block length (R1)
         movf    _r1+1,W,0
-        btfsc   STATUS,C
+        btfsc   STATUS,C,0
         incf    _r1+1,W,0
-        addwf   FSR1H,F
+        addwf   FSR1H,F,0
 
         movf    _r1,W,0          ; FSR2 += block length (R1)
-        addwf   FSR2L,F
+        addwf   FSR2L,F,0
         movf    _r1+1,W,0
-        btfsc   STATUS,C
+        btfsc   STATUS,C,0
         incf    _r1+1,W,0
-        addwf   FSR2H,F
+        addwf   FSR2H,F,0
 
         comf    _r1,f,0           ; complement counter
         comf    _r1+1,f,0         ; in loop, we count upwards to 0
 
-        movf    POSTDEC1         ; decrement FSR1/2 by one
-        movf    POSTDEC2
+        movf    POSTDEC1,W,0         ; decrement FSR1/2 by one
+        movf    POSTDEC2,W,0
 
         bra     C18_memmove_start
 
@@ -161,7 +161,7 @@ C18_memmove_start
 ; shift:  number of elements by which data is to be shifted (-128..+127, e.g. -3 = 3 positions backwards)
 ; blklen: number of elements to be copied (0..255)
 ; size:   size of single array element (0..255)
-;                    0 -1       -2              -3            -4              -5 
+;                       0 -1       -2              -3            -4              -5 
 ; void C18_xmemshift(void *vec, uint8_t offset, int8_t shift, uint8_t blklen, uint8_t size)
 ;
 ; 86 bytes (+70 bytes from C18_memmove, +24 from C18_memcpy, +40 from C18_memmovecopy_args)
@@ -179,7 +179,7 @@ C18_xmemshift
           addwf   PRODL,W,0      
           movwf   FSR1L,0
           movf    INDF0,W,0       ; vec_H
-          btfsc   STATUS,C        
+          btfsc   STATUS,C,0        
           incf    INDF0,W,0       
           addwf   PRODH,W,0
           movwf   FSR1H,0
@@ -201,13 +201,13 @@ C18_xmemshift_pos
           addwf   FSR1L,W,0
           movwf   FSR2L,0
           movf    PRODH,W,0
-          btfsc   STATUS,C
+          btfsc   STATUS,C,0
           incf    PRODH,W,0
           addwf   FSR1H,W,0
           movwf   FSR2H,0
           
           movlw   -3              ; check again if size is negative
-          btfsc   PLUSW0,N,0
+          btfsc   PLUSW0,7,0
           bra     C18_xmemshift_forward ; yes, copy forward
           goto    C18_memmove_entry_from_memshift_backward ; no, copy backwards
 C18_xmemshift_forward

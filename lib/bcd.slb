@@ -55,7 +55,7 @@ C18_toBCD
                     movf    PRODL,W,0     
                     subwf   INDF0,W,0     ; n - (n/10)*10
                     iorwf   _r0,F,0        ; ior into R0
-                    return
+                    return  0
 X18_toBCD
 
 ;<?divWby10>

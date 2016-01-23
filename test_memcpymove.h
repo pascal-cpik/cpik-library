@@ -7,8 +7,6 @@
 
 #include "myhardware.h"
 
-extern char s1[50];
-
 char test_memcpymove();
-
+  
 #endif // #ifndef __TEST_STRCMP_H

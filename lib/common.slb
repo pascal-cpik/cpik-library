@@ -1,0 +1,91 @@
+;   Copyright (C) 2015, Pascal Niklaus pascal@niklaus.org
+;
+;   This file is part of the CPIK library
+;   ----------------------------------------------------------------------- 
+;   This library is free software; you can redistribute it and/or modify it
+;   under the terms of the GNU General Public License as published by the
+;   Free Software Foundation; either version 2.1, or (at your option) any
+;   later version.
+ 
+;   This library is distributed in the hope that it will be useful,
+;   but WITHOUT ANY WARRANTY; without even the implied warranty of
+;   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;   GNU General Public License for more details.
+ 
+;   You should have received a copy of the GNU General Public License 
+;   along with this library; see the file COPYING. If not, write to the
+;   Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
+;   MA 02110-1301, USA.
+ 
+;   As a special exception, if you link this library with other files,
+;   some of which are compiled with CPIK, to produce an executable,
+;   this library does not by itself cause the resulting executable to
+;   be covered by the GNU General Public License. This exception does
+;   not however invalidate any other reasons why the executable file
+;   might be covered by the GNU General Public License.
+
+
+;   VERSION 0.1
+;
+;   HISTORY
+;   - 26-01-2016 file created
+;
+;   CONTENTS
+;
+;   C18_get_ROM_ptr_
+
+
+; ------------------------------------------------------------
+
+; skip over NUL-terminated string that follows call, storing
+; address in TBLPTR for later use
+; skipping works by manipulating the return address
+;
+;<+C18_get_ROM_ptr_>
+C18_get_ROM_ptr_
+    IFDEF EEPGD
+        bsf   EECON1,EEPGD,0
+    ENDIF
+    IFDEF CFGS
+        bcf   EECON1,CFGS,0
+    ENDIF
+        movf    TOSU,W,0
+        movwf   TBLPTRU,0
+        movwf   PREINC0,0
+        movf    TOSH,W,0
+        movwf   TBLPTRH,0
+        movwf   PREINC0,0
+        movf    TOSL,W,0
+        movwf   TBLPTRL,0
+        movwf   PREINC0,0
+
+L18_get_ROM_ptr_loop                             ;skip over data
+        TBLRD*+
+        tstfsz  TABLAT,0
+        bra     L18_get_ROM_ptr_loop
+
+        btfsc   TBLPTRL,0,0                     ;make sure TBLPTR is word-aligned
+        TBLRD*+
+
+        movf    TBLPTRU,W,0                     ;manipulate return address
+        movwf   TOSU,0
+        movf    TBLPTRH,W,0
+        movwf   TOSH,0
+        movf    TBLPTRL,W,0
+        movwf   TOSL,0
+
+        movf   POSTDEC0,W,0                     ;restore TBLPTR for use by main printf_
+        movwf  TBLPTRL,0
+        movf   POSTDEC0,W,0
+        movwf  TBLPTRH,0
+        movf   POSTDEC0,W,0
+        movwf  TBLPTRU,0
+
+        return  0
+X18_get_ROM_ptr_                                ; only here for make funclen
+;<->
+
+;<+C18_ROM_result_char>
+C18_ROM_result_char
+        return  0
+;<->

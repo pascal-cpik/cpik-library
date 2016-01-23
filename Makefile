@@ -9,8 +9,8 @@ SHELL := /bin/bash
 # target PIC processor (syntax: 16f84):
 PROC = 18f4520
 
-FILES := sim_printf  
-LOCALSLBS = strcmp.slb printf.slb
+FILES := sim test_printf test_strcmp test_bcd test_memcpymove test_sort
+LOCALSLBS = strcmp.slb printf.slb common.slb sort.slb bcd.slb memcpymove.slb
 
 LIBS = $(LOCALSLBS:%=lib/%)
 

@@ -7,7 +7,7 @@
 
 #include "myhardware.h"
 
-extern char s1[50];
+//extern char s1[50];
 
 char test_strcmp();
 

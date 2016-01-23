@@ -152,7 +152,7 @@ L18_ssort_getgap_loop
         addlw   LOW(L18_ssort_gaptable)
         movwf   TBLPTRL,0
         movlw   HIGH(L18_ssort_gaptable)
-        btfsc   STATUS,C        
+        btfsc   STATUS,C,0        
         addlw   1
         movwf   TBLPTRH,0
         clrf    TBLPTRU,0
@@ -257,7 +257,7 @@ L18_ssort_while
         ICALL   indirect_call   ; e1,e2,cmpfun already set
         
         ; --- check comparison result
-        comf     _r0,0
+        comf     _r0,W,0
         bn       L18_ssort_while_exit
 
         movlw   -11-5           ;R1:R1+1 = size (used later)
@@ -317,7 +317,7 @@ L18_ssort_while_exit
 ; ------ end of comb for loop ----------        
         
 L18_ssort_gap_loop_exit
-        movlw   9
+        movlw   11
         IBRA    cleanstack1             ; call & return
 
 L18_ssort_gapToR0
@@ -414,7 +414,7 @@ C18_csort
         movwf   _r0+1,0         ; do it in two steps to set Z set
         IBNZ    L18_csort_lenok ; lengthH != 0, sorting required
         movlw   2               
-        subwf   _r0,0 
+        subwf   _r0,W,0 
         IBC     L18_csort_lenok ; lengthL>1, sorting required
         return  0               ; no sorting required 
 L18_csort_lenok        
@@ -473,7 +473,7 @@ L18_csort_gapR1ok
         movf    _r1,W,0         ; R0 -= R1
         subwf   _r0,F,0
         movf    _r1+1,W,0
-        btfss   STATUS,C
+        btfss   STATUS,C,0
         incfsz  _r1+1,W,0
         subwf   _r0+1,F,0
 
@@ -558,14 +558,14 @@ L18_csort_dont_swap
         movf    _r1,W,0         
         addwf   FSR1L,F,0         
         movf    _r1+1,W,0 
-        btfsc   STATUS,C        
+        btfsc   STATUS,C,0        
         incf    _r1+1,W,0       
         addwf   FSR1H,F,0       
         
         movf    _r1,W,0         
         addwf   FSR2L,F,0         
         movf    _r1+1,W,0 
-        btfsc   STATUS,C        
+        btfsc   STATUS,C,0        
         incf    _r1+1,W,0       
         addwf   FSR2H,F,0       
         
@@ -573,12 +573,12 @@ L18_csort_innerloop_checkend
         ; --- check whether e2 reached "stop" value
         movlw   -9+1
         movf    PLUSW0,W,0
-        subwf   FSR2L,0
+        subwf   FSR2L,W,0
         bnz     L18_csort_innerloop_not_done
         
         movlw   -9+2
         movf    PLUSW0,W,0
-        subwf   FSR2H,0
+        subwf   FSR2H,W,0
         bz      L18_csort_innerloop_end
         
 L18_csort_innerloop_not_done
@@ -688,7 +688,7 @@ L18_bsort_outerloop
         movff   INDF0,FSR1H 
         
 L18_bsort_innerloop        
-        movf    POSTDEC2,0      ; FSR2--
+        movf    POSTDEC2,W,0    ; FSR2--
         btfsc   FSR2H,3,0       ; FSR2<0? (FSR2=0x0fff on wrap-around)
         IBRA    L18_bsort_innerloop_end
         
@@ -718,10 +718,10 @@ L18_bsort_innerloop
         ICALL   indirect_call
         
         ; --- clean stack and restore FSR1 
-        movf    POSTDEC0,0
-        movf    POSTDEC0,0
-        movf    POSTDEC0,FSR1H,0
-        movf    POSTDEC0,FSR1L,0        
+        movf    POSTDEC0,W,0
+        movf    POSTDEC0,W,0
+        movff   POSTDEC0,FSR1H
+        movff   POSTDEC0,FSR1L
         
         ; --- restore loop data from stack
         movff   POSTDEC0,FSR2H
@@ -751,7 +751,7 @@ L18_bsort_swap_loop             ; swap & FSR1 += size
         
 L18_bsort_dont_swap               ; FSR1 += size
         addwf   FSR1L,F,0         ;   W contains size
-        btfsc   STATUS,C        
+        btfsc   STATUS,C,0        
         incf    FSR1H,F,0       
         IBRA    L18_bsort_innerloop                                     
         

@@ -18,6 +18,7 @@
 #define TEST_MEMMOVE 1
 #define TEST_SORT    1
 #define TEST_BCD     1
+#define TEST_PRINTF  1
 
 // ** END OF TEST SUITE SWITCHES                                                       **
 // **                                                                                  **
@@ -49,6 +50,7 @@ char result[] = "----- RUNNING -----     ";
 #include "test_memcpymove.h"
 #include "test_strcmp.h"
 #include "test_bcd.h"
+#include "test_printf.h"
 
 #include "lib/strcmp.h"
 
@@ -73,6 +75,7 @@ void genresult(char *txt, uint8_t n)
 int8_t main()
 {
   uint8_t r;
+
 #if TEST_BCD
   if(r = test_bcd()) {
     genresult((char *)"!!! BCD: ",r);
@@ -96,7 +99,15 @@ int8_t main()
     genresult((char *)"!!! SORT: ",r);
     return 0;
   }  
-#endif     
+#endif
+#if TEST_PRINTF
+  if(r = test_printf()) {
+    genresult((char *)"!!! PRINTF: ",r);
+    return 0;
+  }  
+#endif
+
+  
 
   for(r=0u; r<13u; r++)   // generatre string in "cryptic" way so that the 
     result[r] = '*';      // text constant is not visible in RAM (and confounded with the result)

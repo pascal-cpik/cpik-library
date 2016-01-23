@@ -28,7 +28,8 @@
 ;   VERSION 0.1
 ;
 ;   HISTORY
-;   - Created 24-02-2014 by P. Niklaus
+;   - 24-02-2014 created by Pascal Niklaus
+;   - 26-01-2016 ROM string versions of functions added
 ;
 ;   CONTENTS
 ;
@@ -39,12 +40,9 @@
 ;   C18_strncmp
 ;   C18_strcasecmp
 ;   C18_strncasecmp
+;   C18_strcmpROM
 ;
 ;   ----------------------------------------------------------------------- 
-
-
-
-
 
 ; strlen
 ; size_t strlen(char *s);
@@ -54,7 +52,7 @@ C18_strlen
         movlw   -1             ; copy s to FSR1
         movff   PLUSW0,FSR1L     
         movff   INDF0,FSR1H         
-        movwf   _r0,0           ; take advantage that w=0xff
+        movwf   _r0,0          ; take advantage that w=0xff
         movwf   _r0+1,0        
 L18_strlen_loop
         infsnz  _r0,F,0
@@ -131,7 +129,6 @@ X18_strcat
 
 
 
-
 ; compare two strings
 ;
 ; returns -1,0,1 if s1<s2, s1=s2, s1>s2
@@ -140,7 +137,7 @@ X18_strcat
 ; behaviour
 ;
 ; char *strcmp(char *s1, char *s2)
-; 46 bytes
+; 48 bytes
 ;<+C18_strcmp>
 C18_strcmp
         clrf    _r0,0
@@ -151,10 +148,12 @@ C18_strcmp
 
         movlw   -1               ; copy dest to FSR2         
         movff   PLUSW0,FSR2L     
-        movff   INDF0,FSR2H         
+        movff   INDF0,FSR2H
+
+        movf    POSTDEC1,W,0
                    
 L18_strcmp_loop
-        movf    POSTINC1,W,0
+        movf    PREINC1,W,0
         subwf   POSTINC2,W,0
         bnc     L18_strcmp_smaller
         bz      L18_strcmp_checkend
@@ -166,19 +165,17 @@ L18_strcmp_smaller
         return  0
 L18_strcmp_checkend
         movf    INDF1,W,0
-        bnz     L18_strcmp_loop
+        bnz     L18_strcmp_loop        
         return  0
 X18_strcmp        
 ;<->
-
-
 
 
 ; compare at most n characters of two strings
 ; see strcmp for more details
 ;
 ; char *strncmp(char *s1, char *s2, size_t n)
-; 70 bytes
+; 72 bytes
 ;<+C18_strncmp>
 C18_strncmp
         clrf    _r0,0
@@ -197,14 +194,16 @@ C18_strncmp
         movlw   -1               ; copy dest to FSR2 
         movff   PLUSW0,FSR2L     
         movff   INDF0,FSR2H         
-                   
+
+        movf    POSTDEC1,W,0
+
 L18_strncmp_loop
         incf    _r1,F,0
         bnz     L18_strncmp_cont
         incf    _r1+1,F,0
         bz      L18_strncmp_end
 L18_strncmp_cont        
-        movf    POSTINC1,W,0
+        movf    PREINC1,W,0
         subwf   POSTINC2,W,0
         bnc     L18_strncmp_smaller
         bz      L18_strncmp_checkend
@@ -227,7 +226,7 @@ X18_strncmp
 ; letters A-Z
 ;
 ; char *strcasecmp(char *s1, char *s2)
-; 54 bytes (+10 bytes for shared L18_strlib_toupper)
+; 56 bytes (+10 bytes for shared L18_strlib_toupper)
 ;<+C18_strcasecmp>
 C18_strcasecmp
         clrf    _r0,0
@@ -238,13 +237,15 @@ C18_strcasecmp
 
         movlw   -1               ; copy dest to FSR2 
         movff   PLUSW0,FSR2L     
-        movff   INDF0,FSR2H         
+        movff   INDF0,FSR2H
+
+        movf    POSTDEC1,W,0
                    
 L18_strcasecmp_loop
         movf    POSTINC2,W,0
         ICALL   L18_strlib_toupper
         movwf   _r0+1,0
-        movf    POSTINC1,W,0
+        movf    PREINC1,W,0
         ICALL   L18_strlib_toupper        
         subwf   _r0+1,W,0
         bnc     L18_strcasecmp_smaller
@@ -297,12 +298,11 @@ X18_strlib_tolower
 
 
 
-
 ; compare two strings, ignoring the case of A-Z, and
 ; comparing at most n characters
 ;
 ; char *strncasecmp(char *s1, char *s2, size_t n)
-; 78 bytes (+10 bytes for shared L18_strlib_toupper)
+; 80 bytes (+10 bytes for shared L18_strlib_toupper)
 ;<+C18_strncasecmp>
 C18_strncasecmp
         clrf    _r0,0
@@ -320,7 +320,9 @@ C18_strncasecmp
 
         movlw   -1               ; copy dest to FSR2 
         movff   PLUSW0,FSR2L     
-        movff   INDF0,FSR2H         
+        movff   INDF0,FSR2H
+
+        movf    POSTDEC1,W,0
                    
 L18_strncasecmp_loop
         incf    _r1,F,0
@@ -331,7 +333,7 @@ L18_strncasecmp_cont
         movf    POSTINC2,W,0
         ICALL   L18_strlib_toupper
         movwf   _r0+1,0
-        movf    POSTINC1,W,0
+        movf    PREINC1,W,0
         ICALL   L18_strlib_toupper        
         subwf   _r0+1,W,0
         bnc     L18_strncasecmp_smaller
@@ -350,3 +352,200 @@ L18_strncasecmp_end
 X18_strncasecmp        
 ;<?L18_strlib_toupper>
 ;<->
+
+
+; ============================================================
+;               EMBEDDED ROM DATA VARIANTS
+
+
+
+; compare two strings, with the latter being embedded with the code in ROM
+;
+; returns -1,0,1 if s1<s2, s1=s2, s1>s2
+; note that comparisons are unsigned (matters for chars >0x7f) 
+; although char is signed. This is compatible with the GNU libc's
+; behaviour
+;
+; char ROMstrcmp_(char *s1)
+; 38 bytes
+;<+C18_ROMstrcmp_>
+
+C18_ROMstrcmp_
+        clrf    _r0,0           ; result = 0
+        movlw   -1              ; copy RAM string pointer to FSR1
+        movff   PLUSW0,FSR1L
+        movff   INDF0,FSR1H
+        movf    POSTDEC1,W,0    
+
+L18_ROMstrcmp_loop
+        tblrd*+                 ; read rom byte and increment ptr
+        movf    TABLAT,W,0
+        subwf   PREINC1,W,0
+        bnc     L18_ROMstrcmp_smaller
+        bz      L18_ROMstrcmp_checkend
+L18_ROMstrcmp_larger   
+        incf    _r0,F,0
+        return  0
+L18_ROMstrcmp_smaller
+        decf    _r0,F,0
+        return  0
+L18_ROMstrcmp_checkend
+        movf    INDF1,W,0
+        bnz     L18_ROMstrcmp_loop 
+        return  0               ; end of strings reached
+X18_ROMstrcmp_
+;<->
+
+
+
+
+
+; copy string (pointed to by TBLPTR)
+;
+; char ROMstrcpy_(char *dest)
+; 20 bytes
+;<+C18_ROMstrcpy_>
+C18_ROMstrcpy_
+        movlw   -1             ; copy dest to FSR1 and R
+        movff    PLUSW0,FSR1L
+        movff    INDF0,FSR1H
+L18_ROMstrcpy_entry
+L18_ROMstrcpy_loop
+        tblrd*+
+        movf    TABLAT,W,0
+        movwf   POSTINC1,0        
+        bnz     L18_ROMstrcpy_loop
+        return  0 
+X18_ROMstrcpy_        
+;<->
+
+
+
+
+
+; apped string (pointed to by TBLPTR)
+;
+; returns pointer to destination
+;
+; char *strcat_(char *dest)
+; 18 bytes
+;<+C18_ROMstrcat_>
+C18_ROMstrcat_
+        movlw   -1             ; copy dest to FSR2 and R
+        movff    PLUSW0,FSR1L
+        movff    INDF0,FSR1H
+L18_ROMstrcat_entry             ; entry from C18_RFstrcpy_/RFstrcat_
+L18_ROMstrcat_loop
+        movf    POSTINC1,W,0    ; skip to end of destination    
+        bnz     L18_ROMstrcat_loop
+        movf    POSTDEC1,W,0
+        IBRA    L18_ROMstrcpy_entry ; perform regular copy
+X18_ROMstrcat_
+;<?C18_ROMstrcpy_>        
+;<->
+
+
+; ============================================================
+;                    ROM ACCESSOR VARIANTS
+
+; ### Warning: These functions rely on a side effect of the
+; ### ROM accessor function. After accessing element 0,
+; ### TBLPTR points to the next byte. 
+
+
+; copy string passed with ROM accessor
+;
+; char *RFstrcpy(char *dest, accessor_fun)
+; 34 bytes
+;<+C18_RFstrcpy>
+C18_RFstrcpy
+        clrf    PREINC0,0         ; push index of 0
+        movlw   -4
+        movff   PLUSW0,PREINC0
+        movff   PLUSW0,PREINC0        
+        ICALL   indirect_call     ; call ROM accessor to set TBLPTR
+        movf    POSTDEC0,W,0      ; clean stack
+C18_RFstrcpy_entry        
+        movlw    -1               ; copy dest to FSR1 
+        movf    PLUSW0,W,0
+        movwf   FSR1L,0
+        movwf   _r0,0
+        movf    INDF0,W,0
+        movwf   FSR1H,0
+        movwf   _r0+1,0
+        IBRA     L18_ROMstrcpy_entry
+X18_RFstrcpy
+;<?indirect_call>
+;<?C18_ROMstrcpy_>        
+;<->
+
+
+; append string passed with ROM accessor
+;
+; char *strcpy(char *dest, accessor_fun)
+; 34 bytes
+;<+C18_RFstrcat>
+C18_RFstrcat
+        clrf    PREINC0,0         ; push index of 0
+        movlw   -4
+        movff   PLUSW0,PREINC0
+        movff   PLUSW0,PREINC0        
+        ICALL   indirect_call     ; call ROM accessor to set TBLPTR
+        movf    POSTDEC0,W,0      ; clean stack
+C18_RFstrcat_entry        
+        movlw    -1               ; copy dest to FSR1 
+        movf    PLUSW0,W,0
+        movwf   FSR1L,0
+        movwf   _r0,0
+        movf    INDF0,W,0
+        movwf   FSR1H,0
+        movwf   _r0+1,0
+        IBRA     L18_ROMstrcat_entry
+X18_RFstrcat
+;<?C18_ROMstrcat_>
+;<->
+
+; ============================================================
+;                    ROM POINTER VARIANTS
+
+
+
+; copy string passed with ROM pointer
+;
+; char *RPstrcpy(char *dest, ROMptr src)
+; 18 bytes
+;<+C18_RPstrcpy>
+C18_RPstrcpy
+        movlw   -3
+        movff   PLUSW0,PREINC0          ; copy src
+        movff   PLUSW0,PREINC0       
+        ICALL   C18__make_rom_pointer_      ; load TBLPTR
+        movf    POSTDEC0,W,0
+        movf    POSTDEC0,W,0        
+        IBRA    C18_RFstrcpy_entry        
+X18_RPstrcpy
+;<?C18_RFstrcpy>
+;<?C18__make_rom_pointer_>
+;<->
+
+
+
+; append string passed with ROM pointer
+;
+; char *RPstrcpy(char *dest, ROMptr src)
+; 18 bytes
+;<+C18_RPstrcat>
+C18_RPstrcat
+        movlw   -3
+        movff   PLUSW0,PREINC0          ; copy src
+        movff   PLUSW0,PREINC0       
+        ICALL   C18__make_rom_pointer_  ; load TBLPTR
+        movf    POSTDEC0,W,0
+        movf    POSTDEC0,W,0        
+        IBRA    C18_RFstrcat_entry        
+X18_RPstrcat
+;<?C18_RFstrcat>
+;<?C18__make_rom_pointer_>
+;<->
+
+
